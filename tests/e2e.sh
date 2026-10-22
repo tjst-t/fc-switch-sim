@@ -65,7 +65,9 @@ if [ $DEPLOY = 1 ]; then
 fi
 
 step "0. 決まった状態に戻す（ゾーン z_srv1_lib1、ポートは全部有効）"
-curl -s -m 5 -X PUT $API/zoning -d "$ZONE_ON" >/dev/null && ok "ゾーンを戻した" || ng "スイッチの API に届かない"
+api_up() { curl -s -m 3 -o /dev/null $API/switch; }
+wait_for 120 "スイッチの API が答える" api_up
+curl -s -m 5 -X PUT $API/zoning -d "$ZONE_ON" >/dev/null && ok "ゾーンを戻した" || ng "ゾーンを戻せない"
 for i in 0 1; do curl -s -m 5 -X POST $API/ports/$i/enable >/dev/null; done
 
 step "1. ログイン"
