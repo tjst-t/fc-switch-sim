@@ -141,6 +141,35 @@ tests/e2e-ha.sh            # --deploy で作り直しから
 通しの試験（`tests/e2e-libmgr.sh`）：REST と SNMP が一致する、サーバのテープの出し入れが SNMP とトラップに出る、オフラインでサーバの命令が通らなくなりトラップが出る、
 TapeAlert が SNMP・トラップ・サーバの TapeAlert のログに出る、投入したテープがメールスロットに入りサーバから見えて、保管スロットへ移すとトラップが出る、ライブラリ 2 からもトラップが届く。
 
+## Zabbix での監視
+
+冗長構成（fctape-ha）の管理網に Zabbix 7.0 LTS（公式のコンテナ、PostgreSQL）を足し、ライブラリとスイッチを監視する。
+
+```
+lab/clab/zabbix.sh up            # DB .40・サーバ .41・Web .42（http://172.30.31.42:8080/、Admin / zabbix）
+python3 tests/zabbix-setup.py    # テンプレート・ホストを Zabbix の API で入れる（何度流してもよい）
+tests/e2e-zabbix.sh              # 障害を起こして確かめる（--setup で上の 2 つも流す）
+lab/clab/zabbix.sh down
+```
+
+- Zabbix は ContainerLab の外の docker のコンテナとして、同じ管理網（fctape-ha-mgmt）に載せる。
+  動いている構成に ContainerLab でノードを足すと、VM まで作り直しになるため。
+- テンプレート（`Templates/FCSIM`）：
+
+  | テンプレート | 読み方 | 主な項目と障害 |
+  |---|---|---|
+  | FCSIM Tape Library SNMP | SNMP v2c（FCSIM-TAPE-LIBRARY-MIB） | 状態（not online で「高」）、SNMP が 1 分無応答、ドライブの発見（状態・テープ・TapeAlert・入れた回数）、TapeAlert があれば「警告」 |
+  | FCSIM Tape Library REST | HTTP エージェントで libmgr の `/api/v1/library` | 状態（not online で「高」）、テープの入ったドライブの数、メールスロットのテープ（あれば「情報」） |
+  | FCSIM FC Switch REST | HTTP エージェントで fcsw の `/api/v1/ports`・`/nameserver` | ログインの数、REST が 1 分無応答（「高」）、ポートの発見（状態が Online でなければ「警告」・ゾーニングで捨てた数） |
+
+- ホスト：lib1・lib2（SNMP と REST の両方）、fab-a・fab-b（REST）。既定の「Zabbix server」ホストは消す（エージェントが無いため）。
+- Zabbix の JSONPath は `true` との比較を扱えず、一致が無いと失敗するので、数える項目は前処理の JavaScript で数えている。
+
+通しの試験（`tests/e2e-zabbix.sh`）で確かめること（どれも障害に上がり、戻すと消える）：ライブラリ 1 のオフライン（SNMP と REST の両方）、
+ライブラリ 2 のドライブ 3 の TapeAlert、メールスロットへのテープの投入（サーバが保管スロットへ移すと消える）、スイッチ A のポートの無効化、
+スイッチ B の停止（`docker pause`、約 1 分で上がる）、サーバがテープを入れるとドライブの値が変わる。2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。
+スイッチにはまだ SNMP もトラップも無い（REST だけ）。
+
 ## 動かし方（直結の試験の場）
 
 ```
