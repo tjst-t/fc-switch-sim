@@ -4,3 +4,5 @@
 /lab/clab/run/
 /lab/clab/run.clab.yml
 /lab/clab/clab-*/
+/lab/clab/run-ha/
+/lab/clab/run-ha.clab.yml

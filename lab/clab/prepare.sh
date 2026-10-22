@@ -1,6 +1,9 @@
 #!/bin/bash
-# fc-tape.clab.yml の下ごしらえ：スイッチのイメージ、VM のディスク（共通イメージの差分）と cloud-init の種。
+# ContainerLab の構成の下ごしらえ：スイッチのイメージ、VM のディスク（共通イメージの差分）と cloud-init の種。
 # 種には VM の中で流すスクリプトを入れ、起動したら自動で FC の設定まで済ませる。
+#   prepare.sh [single|ha]
+#     single：fc-tape.clab.yml    → run.clab.yml（サーバ 1・ライブラリ 1・スイッチ 1）
+#     ha    ：fc-tape-ha.clab.yml → run-ha.clab.yml（サーバ 1・ライブラリ 2・ファブリック A と B）
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
@@ -10,7 +13,13 @@ BASE=$CACHE/fcsim-base.qcow2
 if [ "${REBUILD:-1}" = 1 ]; then
   sudo docker build -q -f "$ROOT/image/Dockerfile" -t fc-switch-sim/fcsw:dev "$ROOT" >/dev/null
 fi
-sed "s|__CACHE__|$CACHE|g" fc-tape.clab.yml > run.clab.yml
+TOPO=${1:-single}
+case "$TOPO" in
+  single) SRC=fc-tape.clab.yml; OUT=run.clab.yml; RUN=run ;;
+  ha) SRC=fc-tape-ha.clab.yml; OUT=run-ha.clab.yml; RUN=run-ha ;;
+  *) echo "知らない構成 $TOPO（single か ha）" >&2; exit 2 ;;
+esac
+sed "s|__CACHE__|$CACHE|g" $SRC > $OUT
 PUB=$(cat "$CACHE/id_lab.pub")
 b64() { base64 -w0 "$1"; }
 # FCSIM_DEBUG=1 なら、VM の中で libfc・libfcoe のデバッグのログを起動時から出す（調査用）
@@ -20,7 +29,7 @@ else
   DEBUGCMD=true
 fi
 seed() { # 名前 役割の命令
-  local name=$1 cmd=$2 d=run/$1
+  local name=$1 cmd=$2 d=$RUN/$1
   mkdir -p "$d"
   rm -f "$d/disk.qcow2"
   qemu-img create -q -f qcow2 -F qcow2 -b "$BASE" "$d/disk.qcow2" 20G
@@ -54,6 +63,14 @@ ethernets:
 NC
   cloud-localds -N "$d/network-config" "$d/seed.iso" "$d/user-data" "$d/meta-data"
 }
-seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:00:01"
-seed lib1 "/opt/fcsim/lib-setup.sh 52:54:00:fc:00:02 0x2000525400fc0001"
-echo "用意できた。sudo containerlab deploy -t lab/clab/run.clab.yml"
+if [ "$TOPO" = single ]; then
+  seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:00:01"
+  seed lib1 "/opt/fcsim/lib-setup.sh 52:54:00:fc:00:02 0x2000525400fc0001"
+else
+  # MAC：52:54:00:fc:<ファブリック 01=A・02=B>:<ノード 01=srv1・02=lib1・03=lib2>
+  INIS="0x2000525400fc0101 0x2000525400fc0201"
+  seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:01:01,52:54:00:fc:02:01"
+  seed lib1 "/opt/fcsim/lib-setup.sh -i 1 52:54:00:fc:01:02,52:54:00:fc:02:02 $INIS"
+  seed lib2 "/opt/fcsim/lib-setup.sh -i 2 52:54:00:fc:01:03,52:54:00:fc:02:03 $INIS"
+fi
+echo "用意できた。sudo containerlab deploy -t lab/clab/$OUT"
