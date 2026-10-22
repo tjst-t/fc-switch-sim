@@ -1,6 +1,7 @@
 package fabric
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	"github.com/tjst-t/fc-switch-sim/sim/fc"
@@ -49,16 +50,26 @@ func (s *Switch) handleNameServer(src *Login, h fc.Header, payload []byte) {
 			reject(fc.CTRjtUnableToPerf, fc.CTExpPortIDNotReg)
 			return
 		}
+		changed := !bytes.Equal(l.FC4Types[:], body[4:36])
 		copy(l.FC4Types[:], body[4:36])
 		accept(nil)
+		// 登録が変わったら、見える相手に RSCN（FLOGI の時点の RSCN では、まだ FC-4 の種類が無く、
+		// 相手の GPN_FT に出てこない。登録のあとに知らせないと、相手は発見できない）
+		if changed {
+			s.rscnFor(l)
+		}
 	case fc.NSRffID:
 		l := target()
 		if l == nil || len(body) < 8 {
 			reject(fc.CTRjtUnableToPerf, fc.CTExpPortIDNotReg)
 			return
 		}
+		old, had := l.FC4Features[body[7]]
 		l.FC4Features[body[7]] = body[6]
 		accept(nil)
+		if !had || old != body[6] {
+			s.rscnFor(l)
+		}
 	case fc.NSRnnID:
 		l := target()
 		if l == nil || len(body) < 12 {

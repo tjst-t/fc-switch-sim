@@ -49,7 +49,13 @@ diag() {
     $h 'cat /sys/class/fc_host/host*/port_state; for r in /sys/class/fc_remote_ports/rport-*; do echo "$(cat $r/port_name $r/port_id $r/port_state | tr "\n" " ")"; done; sudo dmesg | grep -v -E "exch|Missing Disc" | tail -15' 2>&1 | sed 's/^/      /'
   done
   echo "      --- スイッチ"
-  curl -s -m 5 "$API/events?n=6" | grep message | sed 's/^ */      /'
+  curl -s -m 5 "$API/events?n=12" | grep -E '"(time|message)"' | paste - - | sed 's/^ */      /'
+  echo "      --- ネームサーバ"
+  curl -s -m 5 "$API/nameserver" | grep -E '"(fcid|wwpn|rscnRegistered)"' | paste - - - | sed 's/^ */      /'
+  echo "      --- ゾーニング"
+  curl -s -m 5 "$API/zoning" | tr -d '\n ' | sed 's/^/      /'; echo
+  echo "      --- サーバの dmesg（RSCN・disc・rport 010100）"
+  srv 'sudo dmesg | grep -E "disc:|RSCN|rport 010100|GPN" | grep -v exch | tail -40' 2>&1 | sed 's/^/      /'
 }
 # grep -c は 0 件のとき失敗で終わるので、; true で終わり方をそろえる
 devcount() { srv 'lsscsi | grep -c -E "tape|mediumx"; true' 2>/dev/null; }
@@ -67,7 +73,11 @@ fi
 step "0. 決まった状態に戻す（ゾーン z_srv1_lib1、ポートは全部有効）"
 api_up() { curl -s -m 3 -o /dev/null $API/switch; }
 wait_for 120 "スイッチの API が答える" api_up
-curl -s -m 5 -X PUT $API/zoning -d "$ZONE_ON" >/dev/null && ok "ゾーンを戻した" || ng "ゾーンを戻せない"
+if [ "${E2E_NO_RESET:-}" = 1 ]; then
+  echo "  （E2E_NO_RESET=1：ゾーンを入れ直さない。調査用）"
+else
+  curl -s -m 5 -X PUT $API/zoning -d "$ZONE_ON" >/dev/null && ok "ゾーンを戻した" || ng "ゾーンを戻せない"
+fi
 for i in 0 1; do curl -s -m 5 -X POST $API/ports/$i/enable >/dev/null; done
 
 step "1. ログイン"

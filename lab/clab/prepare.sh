@@ -13,6 +13,12 @@ fi
 sed "s|__CACHE__|$CACHE|g" fc-tape.clab.yml > run.clab.yml
 PUB=$(cat "$CACHE/id_lab.pub")
 b64() { base64 -w0 "$1"; }
+# FCSIM_DEBUG=1 なら、VM の中で libfc・libfcoe のデバッグのログを起動時から出す（調査用）
+if [ "${FCSIM_DEBUG:-}" = 1 ]; then
+  DEBUGCMD='modprobe libfcoe; echo 0x3f > /sys/module/libfc/parameters/debug_logging; echo 0xff > /sys/module/libfcoe/parameters/debug_logging'
+else
+  DEBUGCMD=true
+fi
 seed() { # 名前 役割の命令
   local name=$1 cmd=$2 d=run/$1
   mkdir -p "$d"
@@ -33,6 +39,7 @@ write_files:
     encoding: b64
     content: $(b64 "$ROOT/lab/images/guest/lib-setup.sh")
 runcmd:
+  - [sh, -c, '$DEBUGCMD']
   - [sh, -c, '$cmd > /var/log/fcsim-setup.log 2>&1; echo \$? > /var/log/fcsim-setup.rc']
 UD
   printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$name" "$(date +%s)" "$name" > "$d/meta-data"

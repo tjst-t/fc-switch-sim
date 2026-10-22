@@ -215,8 +215,9 @@ func TestLoginAndDiscovery(t *testing.T) {
 	tape := newENode(t, sw, trs, 1, tapeWWPN)
 	host.login(false)
 	tape.login(true)
-	if n := host.takeRSCN(); n != 1 {
-		t.Fatalf("tape のログインの RSCN が host に 1 つ届くはず：%d", n)
+	// FLOGI・RFT_ID・RFF_ID のそれぞれで RSCN（登録のあとにも知らせないと、相手が発見できない）
+	if n := host.takeRSCN(); n != 3 {
+		t.Fatalf("tape のログインと登録の RSCN が host に 3 つ届くはず：%d", n)
 	}
 	if host.fcid != 0x010000 || tape.fcid != 0x010100 {
 		t.Fatalf("FC_ID がおかしい：%s %s", host.fcid, tape.fcid)
