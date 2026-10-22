@@ -1,0 +1,130 @@
+FCSIM-TAPE-LIBRARY-MIB DEFINITIONS ::= BEGIN
+
+-- fc-switch-sim のテープライブラリの管理 API（libmgr）の MIB。ベンダーに依らない模擬。
+-- 企業番号 99999 は仮のもので、IANA には登録していない。ベンダーが決まったら、そのベンダーの MIB の皮をかぶせる。
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, Integer32, Counter32, enterprises
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC;
+
+fcsimTapeLibraryMIB MODULE-IDENTITY
+    LAST-UPDATED "202610220000Z"
+    ORGANIZATION "fc-switch-sim"
+    CONTACT-INFO "https://github.com/tjst-t/fc-switch-sim"
+    DESCRIPTION  "Tape library management (simulated, vendor neutral)."
+    ::= { fcsim 1 }
+
+fcsim OBJECT IDENTIFIER ::= { enterprises 99999 }
+
+fsNotifications OBJECT IDENTIFIER ::= { fcsimTapeLibraryMIB 0 }
+fsLibrary       OBJECT IDENTIFIER ::= { fcsimTapeLibraryMIB 1 }
+fsDrives        OBJECT IDENTIFIER ::= { fcsimTapeLibraryMIB 2 }
+fsSlots         OBJECT IDENTIFIER ::= { fcsimTapeLibraryMIB 3 }
+
+-- ライブラリ
+
+fsLibVendor OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Vendor identification of the medium changer." ::= { fsLibrary 1 }
+fsLibProduct OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Product identification of the medium changer." ::= { fsLibrary 2 }
+fsLibSerial OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Serial number of the medium changer." ::= { fsLibrary 3 }
+fsLibStatus OBJECT-TYPE
+    SYNTAX INTEGER { online(1), offline(2), unknown(3) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "offline: the changer does not pass TEST UNIT READY." ::= { fsLibrary 4 }
+fsLibDriveCount OBJECT-TYPE
+    SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of drives." ::= { fsLibrary 5 }
+fsLibSlotCount OBJECT-TYPE
+    SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of storage slots." ::= { fsLibrary 6 }
+fsLibIESlotCount OBJECT-TYPE
+    SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of import/export (mail) slots." ::= { fsLibrary 7 }
+fsLibAlertDrives OBJECT-TYPE
+    SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of drives with TapeAlert flags set." ::= { fsLibrary 8 }
+
+-- ドライブ
+
+fsDriveTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF FsDriveEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "Drives." ::= { fsDrives 1 }
+fsDriveEntry OBJECT-TYPE
+    SYNTAX FsDriveEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "A drive." INDEX { fsDriveIndex } ::= { fsDriveTable 1 }
+FsDriveEntry ::= SEQUENCE {
+    fsDriveIndex Integer32, fsDriveSerial DisplayString, fsDriveProduct DisplayString,
+    fsDriveState INTEGER, fsDriveVolume DisplayString, fsDriveAlerts DisplayString, fsDriveLoads Counter32 }
+fsDriveIndex OBJECT-TYPE
+    SYNTAX Integer32 (1..1024) MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Drive number in the library (1-based)." ::= { fsDriveEntry 1 }
+fsDriveSerial OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Drive serial number." ::= { fsDriveEntry 2 }
+fsDriveProduct OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Drive product identification." ::= { fsDriveEntry 3 }
+fsDriveState OBJECT-TYPE
+    SYNTAX INTEGER { empty(1), loaded(2) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Whether a cartridge is in the drive." ::= { fsDriveEntry 4 }
+fsDriveVolume OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Barcode of the loaded cartridge (empty if none)." ::= { fsDriveEntry 5 }
+fsDriveAlerts OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "TapeAlert flag numbers set, comma separated (e.g. 15,20)." ::= { fsDriveEntry 6 }
+fsDriveLoads OBJECT-TYPE
+    SYNTAX Counter32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of loads since the agent started." ::= { fsDriveEntry 7 }
+
+-- スロット
+
+fsSlotTable OBJECT-TYPE
+    SYNTAX SEQUENCE OF FsSlotEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "Storage and import/export slots." ::= { fsSlots 1 }
+fsSlotEntry OBJECT-TYPE
+    SYNTAX FsSlotEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "A slot." INDEX { fsSlotAddress } ::= { fsSlotTable 1 }
+FsSlotEntry ::= SEQUENCE {
+    fsSlotAddress Integer32, fsSlotType INTEGER, fsSlotState INTEGER, fsSlotVolume DisplayString }
+fsSlotAddress OBJECT-TYPE
+    SYNTAX Integer32 (1..65535) MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Element number (as shown by mtx)." ::= { fsSlotEntry 1 }
+fsSlotType OBJECT-TYPE
+    SYNTAX INTEGER { storage(1), importExport(2) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Slot type." ::= { fsSlotEntry 2 }
+fsSlotState OBJECT-TYPE
+    SYNTAX INTEGER { empty(1), full(2) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Whether a cartridge is in the slot." ::= { fsSlotEntry 3 }
+fsSlotVolume OBJECT-TYPE
+    SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Barcode of the cartridge (empty if none)." ::= { fsSlotEntry 4 }
+
+-- 通知（どれも最初に fsLibSerial が付く）
+
+fsLibStatusChange NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsLibStatus } STATUS current
+    DESCRIPTION "The library went online or offline." ::= { fsNotifications 1 }
+fsDriveLoad NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsDriveIndex, fsDriveVolume } STATUS current
+    DESCRIPTION "A cartridge was loaded into a drive." ::= { fsNotifications 2 }
+fsDriveUnload NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsDriveIndex, fsDriveVolume } STATUS current
+    DESCRIPTION "A cartridge was unloaded from a drive." ::= { fsNotifications 3 }
+fsDriveAlert NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsDriveIndex, fsDriveAlerts } STATUS current
+    DESCRIPTION "TapeAlert flags of a drive changed (empty: cleared)." ::= { fsNotifications 4 }
+fsIEImport NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsSlotAddress, fsSlotVolume } STATUS current
+    DESCRIPTION "A cartridge was put into an import/export slot." ::= { fsNotifications 5 }
+fsIERemove NOTIFICATION-TYPE
+    OBJECTS { fsLibSerial, fsSlotAddress, fsSlotVolume } STATUS current
+    DESCRIPTION "A cartridge left an import/export slot." ::= { fsNotifications 6 }
+
+END

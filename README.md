@@ -117,6 +117,30 @@ tests/e2e-ha.sh            # --deploy で作り直しから
 2026-10-22 に、サーバ 2 台の構成で作り直しから 2 回とそのまま 1 回、全部 OK。
 試験では経路が切れてから装置を消すまでの時間（`dev_loss_tmo`）を 10 秒にしている（Linux の既定は 60 秒）。
 
+## テープライブラリの管理 API（libmgr）
+
+モニタリングツールが使う口の模擬。ベンダーに依らない形（REST・SNMP・SNMP トラップ）。冗長構成（fc-tape-ha）のライブラリの VM に入っている。
+
+- `libmgr`（`cmd/libmgr`・`sim/libmgr`）はライブラリの VM の中で動き、mhVTL の状態を 2 秒ごとに読む（ロボットへの READ ELEMENT STATUS と TEST UNIT READY）。
+  サーバが FC 越しにテープを出し入れすると、それがそのまま管理 API に出る。
+- REST：`http://172.30.31.22:8080/api/v1/`（lib1）・`.23`（lib2）
+
+  | | |
+  |---|---|
+  | `GET /library`・`/drives`・`/slots`・`/events` | 全体・ドライブ（状態・テープ・TapeAlert・入れた回数）・スロット・起きたこと |
+  | `POST /library/offline`・`/online` | オフラインにする（サーバからのロボットの命令が Not Ready になる）・戻す |
+  | `PUT /drives/{n}/tapealert` `{"flags":[15]}` | TapeAlert のフラグを立てる（`[]` で消す）。サーバも TapeAlert のログ（`sg_logs -p 0x2e`）で読める |
+  | `POST /import` `{"barcode":"IMP001L8"}` | 新しいテープを作ってメールスロットに入れる（オペレータの差し込み） |
+
+- SNMP（v2c、コミュニティ public）：udp 161。MIB-II（sysName など）と `FCSIM-TAPE-LIBRARY-MIB`（`docs/`、根は `.1.3.6.1.4.1.99999.1`、99999 は仮の企業番号）。
+  snmpd の pass_persist で `libmgr snmp-pass` が答える。値は最大 1 秒古い。
+- トラップ（v2c）：監視局 `mon`（172.30.31.30:162）へ。`fsLibStatusChange`・`fsDriveLoad`・`fsDriveUnload`・`fsDriveAlert`・`fsIEImport`・`fsIERemove`。
+  `sudo docker logs clab-fctape-ha-mon` で 1 行ずつ読める。
+- mhVTL 1.8 の `vtlcmd ... load map` は新しい形式のテープ（`data.0`）を見つけられないので、`libmgr` が空の `data` を置いてから入れている。
+
+通しの試験（`tests/e2e-libmgr.sh`）：REST と SNMP が一致する、サーバのテープの出し入れが SNMP とトラップに出る、オフラインでサーバの命令が通らなくなりトラップが出る、
+TapeAlert が SNMP・トラップ・サーバの TapeAlert のログに出る、投入したテープがメールスロットに入りサーバから見えて、保管スロットへ移すとトラップが出る、ライブラリ 2 からもトラップが届く。
+
 ## 動かし方（直結の試験の場）
 
 ```
@@ -138,4 +162,4 @@ curl -X POST localhost:8080/api/v1/ports/1/disable
 ## これから
 
 - スイッチの再起動（状態を失う）の模擬。
-- ライブラリの管理 API（SNMP など）の模擬、ベンダーの CLI・API の皮。
+- ベンダーの CLI・API・MIB の皮（スイッチとライブラリ）。

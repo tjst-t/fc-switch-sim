@@ -12,7 +12,11 @@ BASE=$CACHE/fcsim-base.qcow2
 [ -f "$BASE" ] || { echo "$BASE が無い。先に lab/images/build-base.sh" >&2; exit 1; }
 if [ "${REBUILD:-1}" = 1 ]; then
   sudo docker build -q -f "$ROOT/image/Dockerfile" -t fc-switch-sim/fcsw:dev "$ROOT" >/dev/null
+  sudo docker build -q -f "$ROOT/image/mon/Dockerfile" -t fc-switch-sim/mon:dev "$ROOT" >/dev/null
 fi
+# テープライブラリの管理 API（libmgr）：VM に入れる
+(cd "$ROOT" && PATH=$PATH:/usr/local/go/bin CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/libmgr ./cmd/libmgr)
+LIBMGR_GZ=$(gzip -9c "$ROOT/bin/libmgr" | base64 -w0)
 TOPO=${1:-single}
 case "$TOPO" in
   single) SRC=fc-tape.clab.yml; OUT=run.clab.yml; RUN=run ;;
@@ -28,8 +32,25 @@ if [ "${FCSIM_DEBUG:-}" = 1 ]; then
 else
   DEBUGCMD=true
 fi
-seed() { # 名前 役割の命令
-  local name=$1 cmd=$2 d=$RUN/$1
+seed() { # 名前 役割の命令 [libmgr の引数（ライブラリだけ）]
+  local name=$1 cmd=$2 d=$RUN/$1 lm=${3:-}
+  local lmfiles="" lmcmd="true"
+  if [ -n "$lm" ]; then
+    lmfiles="  - path: /usr/local/bin/libmgr
+    permissions: \"0755\"
+    encoding: gz+b64
+    content: $LIBMGR_GZ
+  - path: /etc/systemd/system/libmgr.service
+    encoding: b64
+    content: $(b64 "$ROOT/lab/images/guest/libmgr/libmgr.service")
+  - path: /etc/snmp/snmpd.conf
+    encoding: b64
+    content: $(b64 "$ROOT/lab/images/guest/libmgr/snmpd.conf")
+  - path: /etc/default/libmgr
+    content: |
+      LIBMGR_ARGS=\"$lm\""
+    lmcmd="systemctl daemon-reload; systemctl enable --now libmgr; systemctl restart snmpd"
+  fi
   mkdir -p "$d"
   rm -f "$d/disk.qcow2"
   qemu-img create -q -f qcow2 -F qcow2 -b "$BASE" "$d/disk.qcow2" 20G
@@ -47,9 +68,11 @@ write_files:
     permissions: "0755"
     encoding: b64
     content: $(b64 "$ROOT/lab/images/guest/lib-setup.sh")
+$lmfiles
 runcmd:
   - [sh, -c, '$DEBUGCMD']
   - [sh, -c, '$cmd > /var/log/fcsim-setup.log 2>&1; echo \$? > /var/log/fcsim-setup.rc']
+  - [sh, -c, '$lmcmd']
 UD
   printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$name" "$(date +%s)" "$name" > "$d/meta-data"
   cat > "$d/network-config" <<'NC'
@@ -72,7 +95,8 @@ else
   INIS="0x2000525400fc0101 0x2000525400fc0201 0x2000525400fc0104 0x2000525400fc0204"
   seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:01:01,52:54:00:fc:02:01"
   seed srv2 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:01:04,52:54:00:fc:02:04"
-  seed lib1 "/opt/fcsim/lib-setup.sh -i 1 52:54:00:fc:01:02,52:54:00:fc:02:02 $INIS"
-  seed lib2 "/opt/fcsim/lib-setup.sh -i 2 52:54:00:fc:01:03,52:54:00:fc:02:03 $INIS"
+  # 管理 API（REST :8080・SNMP :161）。トラップは監視局 mon（172.30.31.30）へ
+  seed lib1 "/opt/fcsim/lib-setup.sh -i 1 52:54:00:fc:01:02,52:54:00:fc:02:02 $INIS" "-traps 172.30.31.30:162"
+  seed lib2 "/opt/fcsim/lib-setup.sh -i 2 52:54:00:fc:01:03,52:54:00:fc:02:03 $INIS" "-traps 172.30.31.30:162"
 fi
 echo "用意できた。sudo containerlab deploy -t lab/clab/$OUT"

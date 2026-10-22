@@ -12,6 +12,8 @@
 # 先に ./prepare.sh ha。
 #   VM への ssh：ssh -i ../../.cache/id_lab lab@172.30.31.21（srv1）・.22（lib1）・.23（lib2）・.24（srv2）
 #   スイッチの API：http://172.30.31.10:8080/api/v1/（A）・172.30.31.11（B）
+#   ライブラリの管理 API：REST http://172.30.31.22:8080/api/v1/・SNMP udp 172.30.31.22:161（lib1）・.23（lib2）
+#   監視局 mon（172.30.31.30）：トラップを受ける
 name: fctape-ha
 
 mgmt:
@@ -94,7 +96,7 @@ topology:
         POWER_ON_AT_START: "true"
         IPMI_USER: admin
         IPMI_PASS: password
-        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22,hostfwd=tcp::8080-:8080,hostfwd=udp::161-:161"
 
     lib2:
       kind: linux
@@ -114,7 +116,13 @@ topology:
         POWER_ON_AT_START: "true"
         IPMI_USER: admin
         IPMI_PASS: password
-        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22,hostfwd=tcp::8080-:8080,hostfwd=udp::161-:161"
+
+    # 監視局：テープライブラリの SNMP トラップを受ける（docker logs clab-fctape-ha-mon）
+    mon:
+      kind: linux
+      image: fc-switch-sim/mon:dev
+      mgmt-ipv4: 172.30.31.30
 
   links:
     - endpoints: ["srv1:eth1", "fab-a:eth1"]

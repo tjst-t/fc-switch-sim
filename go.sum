@@ -1,3 +1,5 @@
+github.com/gosnmp/gosnmp v1.46.0 h1:Apkq4YaK2G8l/0b9mSQ5ht0RtPlieoARRtSfA/+Xk4E=
+github.com/gosnmp/gosnmp v1.46.0/go.mod h1:LWPVcDKeRsiioQGeITGTQha4mdlx9lgmRmXz6zGINQ4=
 golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
 golang.org/x/sys v0.49.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

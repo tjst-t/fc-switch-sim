@@ -27,6 +27,8 @@ packages:
   - linux-headers-amd64
   - jq
   - ethtool
+  - snmpd
+  - snmp
 runcmd:
   - [sh, -c, 'apt-get install -y linux-headers-$(uname -r) > /var/log/fcsim-headers.log 2>&1 || true']
   # mhVTL：リリース版に固定（master は 2026-10-21 にリンクに失敗した）。
