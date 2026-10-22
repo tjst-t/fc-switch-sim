@@ -3,6 +3,6 @@
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends snmptrapd snmp \
     && rm -rf /var/lib/apt/lists/*
-COPY docs/FCSIM-TAPE-LIBRARY-MIB.txt /usr/share/snmp/mibs/
+COPY docs/FCSIM-TAPE-LIBRARY-MIB.txt docs/FCSIM-FC-SWITCH-MIB.txt /usr/share/snmp/mibs/
 EXPOSE 162/udp
 ENTRYPOINT ["snmptrapd", "-f", "-Lo", "-On", "--disableAuthorization=yes", "-F", "TRAP %B %V| %v\n", "udp:162"]

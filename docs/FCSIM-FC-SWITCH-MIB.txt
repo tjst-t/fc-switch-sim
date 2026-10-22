@@ -1,0 +1,93 @@
+FCSIM-FC-SWITCH-MIB DEFINITIONS ::= BEGIN
+
+-- fc-switch-sim の FC スイッチ（fcsw）の MIB。ベンダーに依らない模擬。
+-- 企業番号 99999 は仮のもので、IANA には登録していない。ベンダーが決まったら、そのベンダーの MIB（FIBRE-CHANNEL-FE-MIB・
+-- Brocade SW-MIB・Cisco の MIB など）の皮をかぶせる。
+
+IMPORTS
+    MODULE-IDENTITY, OBJECT-TYPE, NOTIFICATION-TYPE, Integer32, Counter32, enterprises
+        FROM SNMPv2-SMI
+    DisplayString
+        FROM SNMPv2-TC;
+
+fcsimFcSwitchMIB MODULE-IDENTITY
+    LAST-UPDATED "202610220000Z"
+    ORGANIZATION "fc-switch-sim"
+    CONTACT-INFO "https://github.com/tjst-t/fc-switch-sim"
+    DESCRIPTION  "FC switch (FCoE FCF) management (simulated, vendor neutral)."
+    ::= { fcsim 2 }
+
+fcsim OBJECT IDENTIFIER ::= { enterprises 99999 }
+
+fswNotifications OBJECT IDENTIFIER ::= { fcsimFcSwitchMIB 0 }
+fswSwitch        OBJECT IDENTIFIER ::= { fcsimFcSwitchMIB 1 }
+fswPorts         OBJECT IDENTIFIER ::= { fcsimFcSwitchMIB 2 }
+fswLogins        OBJECT IDENTIFIER ::= { fcsimFcSwitchMIB 3 }
+
+fswName OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Switch name." ::= { fswSwitch 1 }
+fswWWN OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Switch WWN (aa:bb:..)." ::= { fswSwitch 2 }
+fswDomainID OBJECT-TYPE SYNTAX Integer32 (1..239) MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Domain ID." ::= { fswSwitch 3 }
+fswPortCount OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of ports." ::= { fswSwitch 4 }
+fswLoginCount OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of logged-in N_Ports (name server entries)." ::= { fswSwitch 5 }
+fswZoneCount OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of zones in the active zoning." ::= { fswSwitch 6 }
+fswZoningChanges OBJECT-TYPE SYNTAX Counter32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Number of zoning changes since the switch started." ::= { fswSwitch 7 }
+
+fswPortTable OBJECT-TYPE SYNTAX SEQUENCE OF FswPortEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "Ports." ::= { fswPorts 1 }
+fswPortEntry OBJECT-TYPE SYNTAX FswPortEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "A port. Index is port number + 1." INDEX { fswPortIndex } ::= { fswPortTable 1 }
+FswPortEntry ::= SEQUENCE {
+    fswPortNumber Integer32, fswPortInterface DisplayString, fswPortWWN DisplayString, fswPortState INTEGER,
+    fswPortLoginCount Integer32, fswPortFCIDs DisplayString, fswPortZoneDrops Counter32,
+    fswPortRxFCoE Counter32, fswPortTxFCoE Counter32 }
+fswPortNumber OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Port number (0-based)." ::= { fswPortEntry 1 }
+fswPortInterface OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Ethernet interface of the port." ::= { fswPortEntry 2 }
+fswPortWWN OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Port WWN." ::= { fswPortEntry 3 }
+fswPortState OBJECT-TYPE SYNTAX INTEGER { online(1), noLogin(2), disabled(3) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "online: at least one N_Port logged in." ::= { fswPortEntry 4 }
+fswPortLoginCount OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Logged-in N_Ports on the port (FLOGI + FDISC)." ::= { fswPortEntry 5 }
+fswPortFCIDs OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "FC_IDs on the port, comma separated." ::= { fswPortEntry 6 }
+fswPortZoneDrops OBJECT-TYPE SYNTAX Counter32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Frames dropped by zoning." ::= { fswPortEntry 7 }
+fswPortRxFCoE OBJECT-TYPE SYNTAX Counter32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "FCoE frames received." ::= { fswPortEntry 8 }
+fswPortTxFCoE OBJECT-TYPE SYNTAX Counter32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "FCoE frames sent." ::= { fswPortEntry 9 }
+
+fswLoginTable OBJECT-TYPE SYNTAX SEQUENCE OF FswLoginEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "Name server." ::= { fswLogins 1 }
+fswLoginEntry OBJECT-TYPE SYNTAX FswLoginEntry MAX-ACCESS not-accessible STATUS current
+    DESCRIPTION "A logged-in N_Port. Index is the 24-bit FC_ID." INDEX { fswLoginIndex } ::= { fswLoginTable 1 }
+FswLoginEntry ::= SEQUENCE { fswLoginFCID DisplayString, fswLoginWWPN DisplayString, fswLoginPort Integer32, fswLoginNPIV INTEGER }
+fswLoginFCID OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "FC_ID (dd.aa.pp)." ::= { fswLoginEntry 1 }
+fswLoginWWPN OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Port WWN of the N_Port." ::= { fswLoginEntry 2 }
+fswLoginPort OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Switch port number (0-based)." ::= { fswLoginEntry 3 }
+fswLoginNPIV OBJECT-TYPE SYNTAX INTEGER { yes(1), no(2) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "Logged in with FDISC." ::= { fswLoginEntry 4 }
+
+-- 通知（どれも最初に fswName が付く）
+fswPortStateChange NOTIFICATION-TYPE OBJECTS { fswName, fswPortNumber, fswPortInterface, fswPortState } STATUS current
+    DESCRIPTION "Port state changed." ::= { fswNotifications 1 }
+fswLogin NOTIFICATION-TYPE OBJECTS { fswName, fswLoginFCID, fswLoginWWPN, fswLoginPort } STATUS current
+    DESCRIPTION "An N_Port logged in (FLOGI/FDISC)." ::= { fswNotifications 2 }
+fswLogout NOTIFICATION-TYPE OBJECTS { fswName, fswLoginFCID, fswLoginWWPN, fswLoginPort } STATUS current
+    DESCRIPTION "An N_Port logged out." ::= { fswNotifications 3 }
+fswZoningChange NOTIFICATION-TYPE OBJECTS { fswName, fswZoneCount, fswZoningChanges } STATUS current
+    DESCRIPTION "Active zoning was replaced." ::= { fswNotifications 4 }
+
+END

@@ -14,3 +14,6 @@ zoning:
   zones:
     - name: z_srv1_lib1
       members: [srv1, lib1]
+snmp:
+  listen: ":161"
+  community: public

@@ -22,3 +22,7 @@ zoning:
       members: [srv1_b, lib2_b]
     - name: z_srv2_lib2_b
       members: [srv2_b, lib2_b]
+snmp:
+  listen: ":161"
+  community: public
+  traps: ["172.30.31.30:162", "172.30.31.43:1162"]   # 監視局 mon と Zabbix のトラップ受信

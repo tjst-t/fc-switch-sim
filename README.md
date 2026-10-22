@@ -168,7 +168,7 @@ lab/clab/zabbix.sh down
 通しの試験（`tests/e2e-zabbix.sh`）で確かめること（どれも障害に上がり、戻すと消える）：ライブラリ 1 のオフライン（SNMP と REST の両方）、
 ライブラリ 2 のドライブ 3 の TapeAlert、メールスロットへのテープの投入（サーバが保管スロットへ移すと消える）、スイッチ A のポートの無効化、
 スイッチ B の停止（`docker pause`、約 1 分で上がる）、サーバがテープを入れるとドライブの値が変わる。2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。
-スイッチにはまだ SNMP もトラップも無い（REST だけ）。
+スイッチは REST に加えて SNMP とトラップでも監視する（下の「FC スイッチの SNMP」）。
 
 ### SNMP トラップ
 
@@ -182,6 +182,25 @@ lab/clab/zabbix.sh down
 - トリガーの式の文字列の中では、正規表現の `\` と `"` をさらに `\\` と `\"` で書く（`tests/zabbix-setup.py` の `zstr`）。
 - 試験（`tests/e2e-zabbix.sh` の 8）：2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。
 - 試験で投入したテープは `tests/lib-cleanup.sh` でライブラリから出す（試験の最初と最後に流す）。出さないと保管スロットがあふれ、テープを移せなくなる。
+
+## FC スイッチの SNMP
+
+`fcsw` は設定のファイルに `snmp:` があると、SNMPv2c（get・getnext・getbulk、udp 161）で答え、トラップを送る（`sim/snmpagent`・`sim/swsnmp`）。
+
+```yaml
+snmp:
+  listen: ":161"
+  community: public
+  traps: ["172.30.31.30:162", "172.30.31.43:1162"]   # 監視局 mon と Zabbix のトラップ受信
+```
+
+- MIB は `docs/FCSIM-FC-SWITCH-MIB.txt`（根 `.1.3.6.1.4.1.99999.2`、仮の企業番号）。MIB-II の system（sysName など）、スイッチ（名前・WWN・ドメイン・ログインの数・ゾーンの数・ゾーンの変更の回数）、
+  ポートの表（状態 online・noLogin・disabled、FC_ID、ゾーニングで捨てた数、FCoE のフレームの数）、ログインの表（FC_ID・WWPN・ポート・NPIV）。
+- トラップ：`fswPortStateChange`（ポートの状態が変わった）・`fswLogin`・`fswLogout`・`fswZoningChange`。
+- Zabbix のテンプレート：`FCSIM FC Switch SNMP`（ログインの数・ゾーン・ポートの発見と状態、SNMP の無応答）と `FCSIM FC Switch Traps`
+  （ポートごとの「went down (SNMP trap)」：noLogin・disabled のトラップで立ち online のトラップで消える、ログイン・ログアウトのトラップ、
+  「zoning changed (SNMP trap)」はお知らせで 10 分）。fab-a・fab-b のホストは SNMP のインタフェースにした。
+- 試験（`tests/e2e-zabbix.sh` の 9）：2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。FC の冗長・1 系統・管理 API の試験も、この版で全部 OK。
 
 ## 動かし方（直結の試験の場）
 

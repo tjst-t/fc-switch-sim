@@ -15,6 +15,9 @@
 #      オンラインのトラップで消える。ドライブ 1 の TapeAlert のトラップで「Drive 1 ... TapeAlert raised (SNMP trap)」が立ち、
 #      そのドライブにテープを出し入れしても（そのトラップが来ても）立ったまま、フラグを消すトラップで消える。
 #      知らないトラップは snmptrap.fallback に入る
+#   9. スイッチの SNMP とトラップ：SNMP でログインの数・ポートを発見。スイッチ A のポート 2（lib2）を無効にすると
+#      「port 2 (eth3) went down (SNMP trap)」と「not online (SNMP)」が立ち、有効に戻すと消える。ログイン・ログアウトのトラップに
+#      lib2 の WWPN が入る。スイッチ B のゾーニングを入れ直すと「zoning changed (SNMP trap)」が立ち、fswZoningChanges が増える
 set -uo pipefail
 cd "$(dirname "$0")/.."
 if [ "${1:-}" = --setup ]; then
@@ -75,7 +78,7 @@ for h in fab-a fab-b; do
   wait_for 60 "$h：REST でポート 4 つを発見" ports4 $h
   wait_for 30 "$h：ログイン 4" value_is $h fcsim.sw.logins 4
 done
-none() { [ -z "$(zq problems)" ]; }
+none() { [ -z "$(zq problems | grep -v -E "unmatched SNMP trap|zoning changed")" ]; }   # お知らせ（10 分で消える）は除く
 wait_for 120 "障害は 0 件" none || zq problems | sed 's/^/      /'
 
 step "2. ライブラリ 1 をオフライン"
@@ -145,8 +148,34 @@ wait_for 30 "snmptrap.fallback に入った" fb
 wait_for 30 "障害：unmatched SNMP trap received" has_problem "Tape library lib1: unmatched SNMP trap received"
 echo "  （unmatched の障害は 10 分で消える。試験では待たない）"
 
+step "9. スイッチの SNMP とトラップ"
+SWB=http://172.30.31.11:8080/api/v1
+for h in fab-a fab-b; do
+  wait_for 60 "$h：SNMP のログインの数 = 4" value_is $h fcsim.sw.snmp.logins 4
+  ports_snmp() { [ "$(zq count $1 fcsim.sw.snmp.state)" = 4 ]; }
+  wait_for 120 "$h：SNMP でポート 4 つを発見" ports_snmp $h
+done
+traps_ports() { [ "$(zq count fab-a 'snmptrap["99999\.2\.2\.1\.1\.')" = 4 ]; }
+wait_for 120 "fab-a：ポートごとのトラップの項目が 4 つ" traps_ports
+curl -s -m 10 -X POST $SWA/ports/2/disable >/dev/null
+wait_for 60 "障害：FC switch fab-a port 2 (eth3) went down (SNMP trap)" has_problem "FC switch fab-a port 2 (eth3) went down (SNMP trap)"
+wait_for 60 "障害：FC switch fab-a port 2 (eth3) not online (SNMP)" has_problem "FC switch fab-a port 2 (eth3) not online (SNMP)"
+lo() { zq value fab-a 'snmptrap["99999\.2\.0\.[23]\s"]' | grep -q "99999.2.0.3" && zq value fab-a 'snmptrap["99999\.2\.0\.[23]\s"]' | grep -q "20:00:52:54:00:fc:01:03"; }
+wait_for 30 "ログアウトのトラップ（lib2 の WWPN 20:00:52:54:00:fc:01:03）が入った" lo
+curl -s -m 10 -X POST $SWA/ports/2/enable >/dev/null
+wait_for 120 "有効に戻すと went down (SNMP trap) が消える" no_problem "port 2 (eth3) went down (SNMP trap)"
+wait_for 60 "not online (SNMP) も消える" no_problem "port 2 (eth3) not online (SNMP)"
+li() { zq value fab-a 'snmptrap["99999\.2\.0\.[23]\s"]' | grep -q "99999.2.0.2"; }
+wait_for 30 "ログインのトラップが入った" li
+before=$(zq value fab-b fcsim.sw.snmp.zoningchanges)
+curl -s -m 10 -X PUT $SWB/zoning -d "$(curl -s -m 5 $SWB/zoning)" >/dev/null
+wait_for 60 "障害：FC switch fab-b: zoning changed (SNMP trap)" has_problem "FC switch fab-b: zoning changed (SNMP trap)"
+zc() { [ "$(zq value fab-b fcsim.sw.snmp.zoningchanges)" -gt "${before:-0}" ] 2>/dev/null; }
+wait_for 60 "SNMP の fswZoningChanges が増えた（$before から）" zc
+echo "  （zoning changed の障害は 10 分で消える。試験では待たない）"
+
 echo
-p=$(zq problems | grep -v "unmatched SNMP trap"); [ -z "$p" ] && echo "  終わりの障害：0 件" || { echo "  終わりに残った障害："; echo "$p" | sed 's/^/    /'; }
+p=$(zq problems | grep -v -E "unmatched SNMP trap|zoning changed"); [ -z "$p" ] && echo "  終わりの障害：0 件" || { echo "  終わりに残った障害："; echo "$p" | sed 's/^/    /'; }
 echo
 tests/lib-cleanup.sh | sed "s/^/  後始末：/"
 if [ $FAILS = 0 ]; then echo "全部 OK"; else echo "NG が $FAILS 件"; fi

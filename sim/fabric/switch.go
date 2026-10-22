@@ -82,12 +82,15 @@ func (l *Login) hasType(t byte) bool {
 	return v&(1<<bit) != 0
 }
 
-// Event はスイッチで起きたこと（API で見せる）。
+// Event はスイッチで起きたこと（API で見せる。SNMP のトラップにもなる）。
 type Event struct {
 	Time    time.Time `json:"time"`
 	Kind    string    `json:"kind"`
 	Port    int       `json:"port"`
 	Message string    `json:"message"`
+	FCID    string    `json:"fcid,omitempty"`  // login・logout
+	WWPN    string    `json:"wwpn,omitempty"`  // login・logout
+	Zones   int       `json:"zones,omitempty"` // zoning
 }
 
 const maxEvents = 1000
@@ -101,6 +104,7 @@ type Switch struct {
 	zoning Zoning
 	zc     compiledZoning
 	events []Event
+	subs   []func(Event)
 	rxid   uint16
 	oxid   uint16
 	log    *slog.Logger
@@ -139,9 +143,24 @@ func New(cfg Config, transports []Transport, log *slog.Logger) (*Switch, error) 
 }
 
 func (s *Switch) event(kind string, port int, format string, args ...any) {
-	msg := fmt.Sprintf(format, args...)
-	s.log.Info(msg, "kind", kind, "port", port)
-	s.events = append(s.events, Event{Time: s.now(), Kind: kind, Port: port, Message: msg})
+	s.eventWith(Event{Kind: kind, Port: port}, format, args...)
+}
+
+// Subscribe は出来事を受け取る関数を足す（スイッチの鍵を持ったまま呼ぶので、受け取った側で待たないこと）。
+func (s *Switch) Subscribe(fn func(Event)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subs = append(s.subs, fn)
+}
+
+func (s *Switch) eventWith(ev Event, format string, args ...any) {
+	ev.Message = fmt.Sprintf(format, args...)
+	ev.Time = s.now()
+	s.log.Info(ev.Message, "kind", ev.Kind, "port", ev.Port)
+	for _, fn := range s.subs {
+		fn(ev)
+	}
+	s.events = append(s.events, ev)
 	if len(s.events) > maxEvents {
 		s.events = s.events[len(s.events)-maxEvents:]
 	}
@@ -401,7 +420,7 @@ func (s *Switch) handleLSReq(p *Port, src net.HardwareAddr, pkt fip.Packet) {
 			kind = "FDISC"
 		}
 		p.needReset = false
-		s.event("login", p.Index, "%s：WWPN %s に FC_ID %s を割り当てた", kind, l.WWPN, id)
+		s.eventWith(Event{Kind: "login", Port: p.Index, FCID: id.String(), WWPN: l.WWPN.String()}, "%s：WWPN %s に FC_ID %s を割り当てた", kind, l.WWPN, id)
 		s.rscnFor(l)
 	case fip.DTLOGO:
 		l := s.logins[h.SID]
@@ -478,7 +497,7 @@ func (s *Switch) removeLogin(l *Login, why string) {
 		return
 	}
 	delete(s.logins, l.FCID)
-	s.event("logout", l.Port, "WWPN %s（FC_ID %s）がログアウトした：%s", l.WWPN, l.FCID, why)
+	s.eventWith(Event{Kind: "logout", Port: l.Port, FCID: l.FCID.String(), WWPN: l.WWPN.String()}, "WWPN %s（FC_ID %s）がログアウトした：%s", l.WWPN, l.FCID, why)
 	s.rscnFor(l)
 }
 

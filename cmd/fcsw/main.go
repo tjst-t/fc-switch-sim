@@ -1,6 +1,13 @@
 // fcsw は FCoE の FC スイッチ（FCF）のシミュレーター。
 //
 //	fcsw -config switch.yaml [-listen :8080]
+//
+// 設定のファイルに snmp: があれば、SNMP（FCSIM-FC-SWITCH-MIB）で答え、トラップを送る：
+//
+//	snmp:
+//	  listen: ":161"
+//	  community: public
+//	  traps: ["172.30.31.30:162", "172.30.31.43:1162"]
 package main
 
 import (
@@ -16,7 +23,16 @@ import (
 	"github.com/tjst-t/fc-switch-sim/sim/api"
 	"github.com/tjst-t/fc-switch-sim/sim/fabric"
 	"github.com/tjst-t/fc-switch-sim/sim/rawport"
+	"github.com/tjst-t/fc-switch-sim/sim/snmpagent"
+	"github.com/tjst-t/fc-switch-sim/sim/swsnmp"
 )
+
+// SNMPConfig は設定のファイルの snmp:。
+type SNMPConfig struct {
+	Listen    string   `yaml:"listen"`
+	Community string   `yaml:"community"`
+	Traps     []string `yaml:"traps"`
+}
 
 func main() {
 	cfgPath := flag.String("config", "/etc/fcsw/switch.yaml", "設定のファイル")
@@ -44,6 +60,12 @@ func run(cfgPath, listen string, wait time.Duration, log *slog.Logger) error {
 	var cfg fabric.Config
 	if err := yaml.Unmarshal(raw, &cfg); err != nil {
 		return fmt.Errorf("%s を読めない：%w", cfgPath, err)
+	}
+	var extra struct {
+		SNMP *SNMPConfig `yaml:"snmp"`
+	}
+	if err := yaml.Unmarshal(raw, &extra); err != nil {
+		return fmt.Errorf("%s の snmp を読めない：%w", cfgPath, err)
 	}
 	var ports []*rawport.Port
 	var trs []fabric.Transport
@@ -75,6 +97,29 @@ func run(cfgPath, listen string, wait time.Duration, log *slog.Logger) error {
 			sw.Tick()
 		}
 	}()
+	if sc := extra.SNMP; sc != nil {
+		start := time.Now()
+		if sc.Listen == "" {
+			sc.Listen = ":161"
+		}
+		if sc.Community == "" {
+			sc.Community = "public"
+		}
+		var sender *snmpagent.TrapSender
+		if len(sc.Traps) > 0 {
+			sender = &snmpagent.TrapSender{Targets: sc.Traps, Community: sc.Community, Start: start, Log: log}
+		}
+		traps := swsnmp.NewTraps(sw, sender)
+		agent := &snmpagent.Agent{Community: sc.Community, Log: log,
+			Vars: func() []snmpagent.Var { return swsnmp.Vars(sw, traps.ZoningChanges(), start) }}
+		go func() {
+			if err := agent.Serve(sc.Listen); err != nil {
+				log.Error("SNMP で待ち受けられない", "err", err)
+				os.Exit(1)
+			}
+		}()
+		log.Info("SNMP", "listen", sc.Listen, "traps", sc.Traps)
+	}
 	info := sw.Info()
 	log.Info("起動した", "name", info.Name, "switchWWN", info.SwitchWWN, "domain", info.DomainID, "ports", info.Ports, "api", listen)
 	return http.ListenAndServe(listen, api.Handler(sw))

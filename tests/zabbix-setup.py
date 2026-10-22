@@ -165,6 +165,87 @@ def trap_template():
     return items, triggers, rule
 
 
+SW = ".1.3.6.1.4.1.99999.2"
+TS = "FCSIM FC Switch SNMP"
+TT = "FCSIM FC Switch Traps"
+B = "\\"  # バックスラッシュ 1 文字
+
+
+def rx(dotted):  # "99999.2.0.1" → 正規表現 99999\.2\.0\.1
+    return dotted.replace(".", B + ".")
+
+
+def zq(regex):  # 正規表現を、トリガーの式の文字列にする
+    return '"' + regex.replace(B, B + B).replace('"', B + '"') + '"'
+
+
+def switch_snmp_template():
+    items = [
+        dict(name="Logged-in N_Ports (SNMP)", key_="fcsim.sw.snmp.logins", snmp_oid=f"{SW}.1.5.0", value_type=3, delay="10s"),
+        dict(name="Zones (SNMP)", key_="fcsim.sw.snmp.zones", snmp_oid=f"{SW}.1.6.0", value_type=3, delay="30s"),
+        dict(name="Zoning changes (SNMP)", key_="fcsim.sw.snmp.zoningchanges", snmp_oid=f"{SW}.1.7.0", value_type=3, delay="30s"),
+    ]
+    triggers = [dict(description="FC switch {HOST.NAME}: SNMP not responding", priority=4,
+                     expression=f"nodata(/{TS}/fcsim.sw.snmp.logins,1m)=1")]
+    rule = dict(
+        name="FC ports (SNMP)", key_="fcsim.sw.snmp.ports", delay="1m", type=20,
+        snmp_oid=f"discovery[{{#IF}},{SW}.2.1.2,{{#PORTNUM}},{SW}.2.1.1]",
+        item_prototypes=[
+            dict(name="Port {#PORTNUM} ({#IF}) state (SNMP)", key_="fcsim.sw.snmp.state[{#SNMPINDEX}]", type=20,
+                 snmp_oid=f"{SW}.2.1.4.{{#SNMPINDEX}}", value_type=3, delay="10s", valuemap="FCSIM port state"),
+            dict(name="Port {#PORTNUM} ({#IF}) zone drops (SNMP)", key_="fcsim.sw.snmp.zonedrops[{#SNMPINDEX}]", type=20,
+                 snmp_oid=f"{SW}.2.1.7.{{#SNMPINDEX}}", value_type=3, delay="30s"),
+        ],
+        trigger_prototypes=[dict(description="FC switch {HOST.NAME} port {#PORTNUM} ({#IF}) not online (SNMP)", priority=2,
+                                 expression=f"last(/{TS}/fcsim.sw.snmp.state[{{#SNMPINDEX}}])<>1")],
+    )
+    return items, triggers, rule
+
+
+def switch_trap_template():
+    k_state = f'snmptrap["{rx("99999.2.0.1")}{B}s"]'
+    k_login = f'snmptrap["{rx("99999.2.0.")}[23]{B}s"]'
+    k_zone = f'snmptrap["{rx("99999.2.0.4")}{B}s"]'
+    items = [
+        dict(name="Trap: port state change", key_=k_state),
+        dict(name="Trap: login/logout", key_=k_login),
+        dict(name="Trap: zoning change", key_=k_zone),
+        dict(name="Trap: unmatched", key_="snmptrap.fallback"),
+    ]
+    triggers = [
+        # ゾーンの変更は「お知らせ」：10 分間だけ出る
+        dict(description="FC switch {HOST.NAME}: zoning changed (SNMP trap)", priority=1,
+             expression=f"count(/{TT}/{k_zone},10m)>0"),
+        dict(description="FC switch {HOST.NAME}: unmatched SNMP trap received", priority=1,
+             expression=f"count(/{TT}/snmptrap.fallback,10m)>0"),
+    ]
+    i = "{#SNMPINDEX}"
+    k_port = f'snmptrap["{rx("99999.2.2.1.1.")}{i} = "]'   # そのポートの portStateChange（fswPortNumber の変数を含む）
+    state_is = rx("2.2.1.4.") + i + " = "
+    rule = dict(
+        name="FC ports (traps)", key_="fcsim.sw.trapports", delay="1m", type=20,
+        snmp_oid=f"discovery[{{#IF}},{SW}.2.1.2,{{#PORTNUM}},{SW}.2.1.1]",
+        item_prototypes=[dict(name="Trap: port {#PORTNUM} ({#IF}) state change", key_=k_port, type=17, value_type=2)],
+        trigger_prototypes=[dict(
+            description="FC switch {HOST.NAME} port {#PORTNUM} ({#IF}) went down (SNMP trap)", priority=3,
+            expression=f"find(/{TT}/{k_port},,\"regexp\",{zq(state_is + '[23]')})=1",
+            recovery_mode=1,
+            recovery_expression=f"find(/{TT}/{k_port},,\"regexp\",{zq(state_is + '1')})=1")],
+    )
+    return items, triggers, rule
+
+
+def add_rule(z, tid, rule, vm=None):
+    rid = z.call("discoveryrule.create", {k: v for k, v in rule.items() if not k.endswith("_prototypes")} | {"hostid": tid})["itemids"][0]
+    for ip in rule["item_prototypes"]:
+        p = {k: v for k, v in ip.items() if k != "valuemap"} | {"hostid": tid, "ruleid": rid}
+        if "valuemap" in ip:
+            p["valuemapid"] = vm[ip["valuemap"]]
+        z.call("itemprototype.create", p)
+    for tp in rule["trigger_prototypes"]:
+        z.call("triggerprototype.create", tp)
+
+
 # ---- Zabbix に入れる ----
 
 def jsonpath_pre(path):
@@ -272,12 +353,32 @@ def build(z):
     for t in triggers:
         z.call("trigger.create", t)
     trap_tid = tid
+    # スイッチの SNMP
+    tid = ensure_template(z, TS, tgid)
+    ensure_valuemap(z, tid, "FCSIM port state", {"1": "online", "2": "noLogin", "3": "disabled"})
+    svm = {v["name"]: v["valuemapid"] for v in z.call("valuemap.get", {"hostids": tid, "output": ["valuemapid", "name"]})}
+    items, triggers, rule = switch_snmp_template()
+    for it in items:
+        z.call("item.create", it | {"hostid": tid, "type": 20})
+    add_rule(z, tid, rule, svm)
+    for t in triggers:
+        z.call("trigger.create", t)
+    sw_snmp_tid = tid
+    # スイッチのトラップ
+    tid = ensure_template(z, TT, tgid)
+    items, triggers, rule = switch_trap_template()
+    for it in items:
+        z.call("item.create", it | {"hostid": tid, "type": 17, "value_type": 2})
+    add_rule(z, tid, rule)
+    for t in triggers:
+        z.call("trigger.create", t)
+    sw_trap_tid = tid
     # ホスト（トラップは送り元の IP がホストの SNMP のインタフェースと一致するもので受ける）
     hosts = [
         ("lib1", "172.30.31.22", [snmp_tid, lib_rest_tid, trap_tid], True),
         ("lib2", "172.30.31.23", [snmp_tid, lib_rest_tid, trap_tid], True),
-        ("fab-a", "172.30.31.10", [sw_tid], False),
-        ("fab-b", "172.30.31.11", [sw_tid], False),
+        ("fab-a", "172.30.31.10", [sw_tid, sw_snmp_tid, sw_trap_tid], True),
+        ("fab-b", "172.30.31.11", [sw_tid, sw_snmp_tid, sw_trap_tid], True),
     ]
     for name, ip, tids, snmp in hosts:
         old = z.call("host.get", {"filter": {"host": [name]}})
@@ -291,7 +392,7 @@ def build(z):
     # 既定の「Zabbix server」ホスト（エージェントが無いので障害になる）は消す
     for h in z.call("host.get", {"filter": {"host": ["Zabbix server"]}}):
         z.call("host.delete", [h["hostid"]])
-    print("Zabbix に入れた：テンプレート 4、ホスト", ", ".join(h[0] for h in hosts))
+    print("Zabbix に入れた：テンプレート 6、ホスト", ", ".join(h[0] for h in hosts))
 
 
 if __name__ == "__main__":

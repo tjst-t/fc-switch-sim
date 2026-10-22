@@ -143,7 +143,7 @@ func (s *Switch) SetZoning(z Zoning) error {
 	defer s.mu.Unlock()
 	s.zc = zc
 	s.zoning = normalize(z)
-	s.event("zoning", -1, "ゾーニングを変えた（ゾーン %d 個、ゾーンが無いときは %s）", len(z.Zones), s.zoning.DefaultZone)
+	s.eventWith(Event{Kind: "zoning", Port: -1, Zones: len(z.Zones)}, "ゾーニングを変えた（ゾーン %d 個、ゾーンが無いときは %s）", len(z.Zones), s.zoning.DefaultZone)
 	s.rscnAll()
 	return nil
 }
