@@ -1,4 +1,4 @@
-# 冗長構成のファブリック A（ポート 0：srv1、1：lib1、2：lib2）
+# 冗長構成のファブリック A（ポート 0：srv1、1：lib1、2：lib2、3：srv2）
 name: fab-a
 switchWWN: "10:00:00:05:1e:fc:00:0a"
 domainID: 1
@@ -7,14 +7,18 @@ ports:
   - interface: eth1
   - interface: eth2
   - interface: eth3
+  - interface: eth4
 zoning:
   defaultZone: noaccess
   aliases:
     srv1_a: ["20:00:52:54:00:fc:01:01"]
     lib1_a: ["20:00:52:54:00:fc:01:02"]
     lib2_a: ["20:00:52:54:00:fc:01:03"]
+    srv2_a: ["20:00:52:54:00:fc:01:04"]
   zones:
     - name: z_srv1_lib1_a
       members: [srv1_a, lib1_a]
     - name: z_srv1_lib2_a
       members: [srv1_a, lib2_a]
+    - name: z_srv2_lib2_a
+      members: [srv2_a, lib2_a]

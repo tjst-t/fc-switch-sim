@@ -1,18 +1,20 @@
 #!/bin/bash
-# 冗長構成（lab/clab/fc-tape-ha.clab.yml：サーバ 1・ライブラリ 2・ファブリック A と B）を通しで確かめる。
+# 冗長構成（lab/clab/fc-tape-ha.clab.yml：サーバ 2・ライブラリ 2・ファブリック A と B）を通しで確かめる。
 #
 #   tests/e2e-ha.sh            いま動いている構成を確かめる
 #   tests/e2e-ha.sh --deploy   作り直して（prepare ha → deploy）から確かめる
 #   tests/e2e-ha.sh --deploy --destroy   終わったら壊す
 #
 # 確かめること：
-#   1. 6 つの N_Port（3 台 × 2 ファブリック）がログインし、サーバの fc_host が A・B とも Online
+#   1. 8 つの N_Port（4 台 × 2 ファブリック）がログインし、サーバの fc_host が A・B とも Online
 #   2. サーバから、ライブラリ 2 台 × 装置 5 個が、経路 A と B の両方で見える（20 個。シリアル番号ごとに 2 本）
 #   3. 両方のライブラリで：経路 A のロボットでテープを入れ、経路 A のドライブで書き、経路 B の同じドライブで読み戻して一致
 #   4. 経路 B で書いている最中にスイッチ A を止めても、書き込みは成功し中身も一致する
 #      スイッチ A が止まっている間、経路 A の装置が消え、経路 B の 10 個は残る
 #   5. スイッチ A を戻すと、経路 A の装置が戻る（20 個）
 #   6. スイッチ B でライブラリ 2 のポートだけを無効にすると、ライブラリ 2 の経路 B だけが消え（15 個）、戻すと戻る
+#   7. サーバ 2 台：srv2 にはゾーンどおりライブラリ 2 だけ（10 個）が見える。2 台から別々のライブラリへ同時に書いて一致。
+#      スイッチ A のゾーンに srv2 とライブラリ 1 を足すと、srv2 にライブラリ 1 の経路 A（5 個）が増え、外すと消える
 set -uo pipefail
 cd "$(dirname "$0")/.."
 DEPLOY=0; DESTROY=0
@@ -26,10 +28,12 @@ done
 TOPO=lab/clab/run-ha.clab.yml
 API_A=http://172.30.31.10:8080/api/v1
 API_B=http://172.30.31.11:8080/api/v1
-SRV=172.30.31.21
+SRV=172.30.31.21; SRV2=172.30.31.24
 SSHO=(-i .cache/id_lab -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10)
 vm() { local ip=$1; shift; ssh "${SSHO[@]}" lab@$ip "$@"; }
 srv() { vm $SRV "$@"; }
+srv2() { vm $SRV2 "$@"; }
+ON=$SRV   # paths・devcount が見るサーバ
 FAILS=0
 ok() { echo "  OK  $*"; }
 ng() { echo "  NG  $*"; FAILS=$((FAILS+1)); }
@@ -53,7 +57,7 @@ diag() {
 }
 # サーバから見える装置の表：「シリアル番号 ファブリック(A|B) /dev/sgN /dev/nstN（ドライブだけ）」
 paths() {
-  srv 'FA=$(for h in /sys/class/fc_host/host*; do [ "$(cat $h/fabric_name)" = 0x100000051efc000a ] && basename $h; done)
+  vm $ON 'FA=$(for h in /sys/class/fc_host/host*; do [ "$(cat $h/fabric_name)" = 0x100000051efc000a ] && basename $h; done)
     lsscsi -g | grep -E "tape|mediumx" | while read hctl type rest; do
       sg=$(echo "$rest" | awk "{print \$NF}"); st=$(echo "$rest" | awk "{print \$(NF-1)}")
       h=host$(echo "$hctl" | tr -d "[" | cut -d: -f1)
@@ -63,9 +67,9 @@ paths() {
       echo "$ser $fab $sg $nst"
     done | sort'
 }
-devcount() { srv 'lsscsi | grep -c -E "tape|mediumx"; true' 2>/dev/null; }
+devcount() { vm $ON 'lsscsi | grep -c -E "tape|mediumx"; true' 2>/dev/null; }
 devs_are() { [ "$(devcount)" = "$1" ]; }
-set_dev_loss() { srv 'for r in /sys/class/fc_remote_ports/rport-*; do echo 10 | sudo tee $r/dev_loss_tmo >/dev/null 2>&1; done'; }
+set_dev_loss() { vm $ON 'for r in /sys/class/fc_remote_ports/rport-*; do echo 10 | sudo tee $r/dev_loss_tmo >/dev/null 2>&1; done'; }
 # 経路表から 1 つ引く：pick <表> <シリアル番号> <A|B> <列 3=sg・4=nst>
 pick() { awk -v s="$2" -v f="$3" -v c="$4" '$1==s && $2==f {print $c; exit}' <<<"$1"; }
 
@@ -81,16 +85,16 @@ step "0. 決まった状態に戻す（スイッチ A を動かす、ポート�
 sudo docker unpause clab-fctape-ha-fab-a >/dev/null 2>&1 || true
 api_up() { curl -s -m 3 -o /dev/null $API_A/switch && curl -s -m 3 -o /dev/null $API_B/switch; }
 wait_for 120 "両方のスイッチの API が答える" api_up
-for api in $API_A $API_B; do for i in 0 1 2; do curl -s -m 5 -X POST $api/ports/$i/enable >/dev/null; done; done
+for api in $API_A $API_B; do for i in 0 1 2 3; do curl -s -m 5 -X POST $api/ports/$i/enable >/dev/null; done; done
 
 step "1. ログイン"
-for ip in $SRV 172.30.31.22 172.30.31.23; do
+for ip in $SRV $SRV2 172.30.31.22 172.30.31.23; do
   wait_for 300 "$ip の設定が終わった" vm $ip 'test -f /var/log/fcsim-setup.rc'
   [ "$(vm $ip cat /var/log/fcsim-setup.rc)" = 0 ] && ok "$ip の設定が成功" || ng "$ip の設定が失敗（/var/log/fcsim-setup.log）"
 done
-ns3() { [ "$(curl -s -m 5 $1/nameserver | grep -c '"fcid"')" = 3 ]; }
-wait_for 120 "スイッチ A のネームサーバに 3 件" ns3 $API_A
-wait_for 120 "スイッチ B のネームサーバに 3 件" ns3 $API_B
+ns4() { [ "$(curl -s -m 5 $1/nameserver | grep -c '"fcid"')" = 4 ]; }
+wait_for 120 "スイッチ A のネームサーバに 4 件" ns4 $API_A
+wait_for 120 "スイッチ B のネームサーバに 4 件" ns4 $API_B
 st=$(srv 'cat /sys/class/fc_host/host*/port_state | tr "\n" " "')
 [ "$st" = "Online Online " ] && ok "サーバの fc_host が 2 つとも Online" || ng "サーバの fc_host：$st"
 
@@ -159,6 +163,46 @@ n=$(awk '$1 ~ /^LIB2_/ && $2=="B"' <<<"$P3" | wc -l); m=$(awk '$1 ~ /^LIB1_/' <<
 [ "$n" = 0 ] && [ "$m" = 10 ] && ok "消えたのはライブラリ 2 の経路 B だけ" || ng "消えた経路が合わない（LIB2 の B：$n、LIB1：$m）"
 curl -s -m 5 -X POST $API_B/ports/2/enable >/dev/null
 wait_for 120 "有効に戻すと戻る（20 個）" devs_are 20
+
+step "7. サーバ 2 台"
+ON=$SRV2
+wait_for 60 "srv2 に装置 10 個（ライブラリ 2 だけ × 経路 2 本）" devs_are 10
+set_dev_loss
+Q=$(paths)
+[ "$(awk '$1 ~ /^LIB1_/' <<<"$Q" | wc -l)" = 0 ] && [ "$(awk '$1 ~ /^LIB2_/' <<<"$Q" | wc -l)" = 10 ] \
+  && ok "srv2 にはライブラリ 1 が見えず、ライブラリ 2 が経路 A・B で見える（ゾーンどおり）" || ng "srv2 の見え方がゾーンと合わない"
+ON=$SRV
+P=$(paths)
+# srv1 → ライブラリ 1 のドライブ 2（経路 A）、srv2 → ライブラリ 2 のドライブ 2（経路 B）へ同時に書く
+# （ドライブ 1・2 は LTO-8、3・4 は LTO-6。テープは LTO-8 なので 3・4 には入らない＝本物と同じく断られる）
+CH1=$(pick "$P" LIB1_A A 3); T1=$(pick "$P" LIB1_A2 A 4)
+CH2=$(pick "$Q" LIB2_A B 3); T2=$(pick "$Q" LIB2_A2 B 4)
+job() { # 命令 ロボット スロット ドライブの番号 ドライブ
+  local cmd=$1 ch=$2 slot=$3 de=$4 t=$5
+  $cmd "set -e; cd /var/tmp; sudo mtx -f $ch load $slot $de >/dev/null
+    sudo head -c 200000000 /dev/urandom | sudo tee w7.bin >/dev/null
+    sudo mt -f $t rewind; sudo timeout 90 dd if=w7.bin of=$t bs=1M status=none; sudo mt -f $t rewind
+    sudo timeout 90 dd if=$t of=r7.bin bs=1M status=none; sudo mt -f $t rewind
+    sudo cmp -s w7.bin r7.bin && echo MATCH
+    sudo mtx -f $ch unload $slot $de >/dev/null; sudo rm -f w7.bin r7.bin" 2>&1
+}
+job srv $CH1 3 1 $T1 > /tmp/e2e-ha-j1.txt & J1=$!
+job srv2 $CH2 3 1 $T2 > /tmp/e2e-ha-j2.txt & J2=$!
+wait $J1 $J2
+grep -q MATCH /tmp/e2e-ha-j1.txt && ok "srv1：ライブラリ 1 のドライブ 2 に 200MB 書いて一致（同時）" || { ng "srv1 の同時書き込み"; tail -3 /tmp/e2e-ha-j1.txt | sed 's/^/      /'; }
+grep -q MATCH /tmp/e2e-ha-j2.txt && ok "srv2：ライブラリ 2 のドライブ 2 に 200MB 書いて一致（同時）" || { ng "srv2 の同時書き込み"; tail -3 /tmp/e2e-ha-j2.txt | sed 's/^/      /'; }
+# ゾーンの変更：スイッチ A で srv2 にライブラリ 1 を見せる
+ZA=$(curl -s -m 5 $API_A/zoning)
+ZA2=$(python3 -c 'import json,sys; z=json.loads(sys.argv[1]); z["zones"].append({"name":"z_srv2_lib1_a","members":["srv2_a","lib1_a"]}); print(json.dumps(z))' "$ZA")
+curl -s -m 5 -X PUT $API_A/zoning -d "$ZA2" >/dev/null
+ON=$SRV2
+wait_for 60 "ゾーンを足すと、srv2 にライブラリ 1 の経路 A が増える（15 個）" devs_are 15
+[ "$(paths | awk '$1 ~ /^LIB1_/ {print $2}' | sort -u | tr -d '\n')" = A ] && ok "増えたのはライブラリ 1 の経路 A だけ" || ng "増えた経路が合わない"
+set_dev_loss
+curl -s -m 5 -X PUT $API_A/zoning -d "$ZA" >/dev/null
+wait_for 60 "ゾーンを戻すと消える（10 個）" devs_are 10
+ON=$SRV
+wait_for 30 "srv1 は変わらず 20 個" devs_are 20
 
 step "スイッチの数え"
 for api in $API_A $API_B; do

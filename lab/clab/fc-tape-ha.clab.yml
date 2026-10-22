@@ -1,14 +1,16 @@
-# 冗長構成：サーバ 1 台・テープライブラリ 2 台・FC スイッチ 2 台（ファブリック A と B）
+# 冗長構成：サーバ 2 台・テープライブラリ 2 台・FC スイッチ 2 台（ファブリック A と B）
 #
 #            ┌──── fab-a（fcsw、ドメイン 1）────┐
 #   srv1 ────┤ eth1 ─ eth1   eth2 ─ eth1 lib1   │
 #   （VM）    │       eth3 ─ eth1 lib2          │
 #            └──── fab-b（fcsw、ドメイン 2）────┘
-#   srv1・lib1・lib2 はどれも FC の NIC を 2 つ持ち、eth1 を A に、eth2 を B につなぐ。
-#   MAC（＝ WWPN の下 6 バイト）：52:54:00:fc:<01=A・02=B>:<01=srv1・02=lib1・03=lib2>
+#   srv2 ────┘（eth4 に、srv1 と同じく A と B の両方）
+#   srv1・srv2・lib1・lib2 はどれも FC の NIC を 2 つ持ち、eth1 を A に、eth2 を B につなぐ。
+#   MAC（＝ WWPN の下 6 バイト）：52:54:00:fc:<01=A・02=B>:<01=srv1・02=lib1・03=lib2・04=srv2>
+#   ゾーン：srv1 はライブラリ 1 と 2、srv2 はライブラリ 2 だけ
 #
 # 先に ./prepare.sh ha。
-#   VM への ssh：ssh -i ../../.cache/id_lab lab@172.30.31.21（srv1）・.22（lib1）・.23（lib2）
+#   VM への ssh：ssh -i ../../.cache/id_lab lab@172.30.31.21（srv1）・.22（lib1）・.23（lib2）・.24（srv2）
 #   スイッチの API：http://172.30.31.10:8080/api/v1/（A）・172.30.31.11（B）
 name: fctape-ha
 
@@ -49,6 +51,26 @@ topology:
         VM_NETWORKS: eth1,eth2
         VM_NET_MTU: "9500"
         VM_MACS: "52:54:00:fc:01:01,52:54:00:fc:02:01"
+        POWER_ON_AT_START: "true"
+        IPMI_USER: admin
+        IPMI_PASS: password
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+
+    srv2:
+      kind: linux
+      mgmt-ipv4: 172.30.31.24
+      devices: [/dev/net/tun, /dev/kvm]
+      binds:
+        - run-ha/srv2:/vm
+        - __CACHE__:__CACHE__:ro
+      env:
+        VM_MEMORY: "4096"
+        VM_CPUS: "2"
+        VM_BOOT_MODE: bios
+        VM_CDROM: /vm/seed.iso
+        VM_NETWORKS: eth1,eth2
+        VM_NET_MTU: "9500"
+        VM_MACS: "52:54:00:fc:01:04,52:54:00:fc:02:04"
         POWER_ON_AT_START: "true"
         IPMI_USER: admin
         IPMI_PASS: password
@@ -98,6 +120,8 @@ topology:
     - endpoints: ["srv1:eth1", "fab-a:eth1"]
     - endpoints: ["lib1:eth1", "fab-a:eth2"]
     - endpoints: ["lib2:eth1", "fab-a:eth3"]
+    - endpoints: ["srv2:eth1", "fab-a:eth4"]
     - endpoints: ["srv1:eth2", "fab-b:eth1"]
     - endpoints: ["lib1:eth2", "fab-b:eth2"]
     - endpoints: ["lib2:eth2", "fab-b:eth3"]
+    - endpoints: ["srv2:eth2", "fab-b:eth4"]

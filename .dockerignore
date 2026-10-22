@@ -1,5 +1,7 @@
 .cache
 lab/run
 lab/clab/run
+lab/clab/run-ha
+lab/clab/clab-*
 bin
 .git
