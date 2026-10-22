@@ -11,6 +11,10 @@
 #   5. スイッチ A のポート 1（lib1）を無効 → 「port 1 (eth2) is Disabled」
 #   6. スイッチ B を止める（docker pause）→ 「FC switch fab-b: REST not responding」（1 分のデータ無し）
 #   7. サーバがテープを入れると、Zabbix のドライブの値（state・volume）が変わる
+#   8. SNMP トラップ（Zabbix のトラップ受信 .43 で受ける）：オフラインのトラップで「went offline (SNMP trap)」が立ち、
+#      オンラインのトラップで消える。ドライブ 1 の TapeAlert のトラップで「Drive 1 ... TapeAlert raised (SNMP trap)」が立ち、
+#      そのドライブにテープを出し入れしても（そのトラップが来ても）立ったまま、フラグを消すトラップで消える。
+#      知らないトラップは snmptrap.fallback に入る
 set -uo pipefail
 cd "$(dirname "$0")/.."
 if [ "${1:-}" = --setup ]; then
@@ -57,6 +61,7 @@ wait_for() {
   ng "$what（$t 秒待っても成り立たない）"; return 1
 }
 
+tests/lib-cleanup.sh >/dev/null 2>&1 || true   # 前の試験で投入したテープが残っていれば出す（保管スロットがあふれないように）
 step "1. 値が取れている"
 for h in lib1 lib2; do
   wait_for 90 "$h：SNMP の状態 = 1（online）" value_is $h fcsim.lib.status 1
@@ -117,8 +122,32 @@ wait_for 30 "Zabbix：lib1 のドライブ 1 の state = 2（loaded）" value_is
 srv "sudo mtx -f $CH unload $SLOT 0" >/dev/null
 wait_for 60 "出すと state = 1（empty）" value_is lib1 "fcsim.drive.state[1]" 1
 
+step "8. SNMP トラップ"
+has_trap_problem() { has_problem "$1" && zq problems | grep -F "$1" | grep -q "SNMP trap"; }
+curl -s -m 10 -X POST $LIB1/library/offline >/dev/null
+wait_for 60 "障害：Tape library lib1 went offline (SNMP trap)" has_problem "Tape library lib1 went offline (SNMP trap)"
+curl -s -m 10 -X POST $LIB1/library/online >/dev/null
+wait_for 60 "online のトラップで消える" no_problem "went offline (SNMP trap)"
+curl -s -m 10 -X PUT $LIB1/drives/1/tapealert -d '{"flags":[15]}' >/dev/null
+wait_for 60 "障害：Drive 1 (LIB1_A1) on lib1: TapeAlert raised (SNMP trap)" has_problem "Drive 1 (LIB1_A1) on lib1: TapeAlert raised (SNMP trap)"
+srv "sudo mtx -f $CH load $SLOT 0 && sleep 5 && sudo mtx -f $CH unload $SLOT 0" >/dev/null && ok "サーバがドライブ 1 にテープを出し入れした（fsDriveLoad・fsDriveUnload のトラップ）" || ng "テープの出し入れに失敗"
+sleep 15
+has_problem "Drive 1 (LIB1_A1) on lib1: TapeAlert raised (SNMP trap)" && ok "出し入れのトラップでは障害は消えない" || ng "出し入れのトラップで障害が消えた"
+lv() { zq value lib1 'snmptrap["99999\.1\.0\.[2356]\s"]' | grep -q "99999.1.0.3"; }
+wait_for 30 "出し入れのトラップが Zabbix の項目に入った（最後は fsDriveUnload）" lv
+curl -s -m 10 -X PUT $LIB1/drives/1/tapealert -d '{"flags":[]}' >/dev/null
+wait_for 60 "フラグを消すトラップで消える" no_problem "TapeAlert raised (SNMP trap)"
+# 知らないトラップ（ライブラリの VM から、知らない通知の番号で送る）
+ssh "${SSHO[@]}" lab@172.30.31.22 "snmptrap -v2c -c public 172.30.31.43:1162 '' .1.3.6.1.4.1.99999.1.0.99 .1.3.6.1.4.1.99999.1.1.3.0 s LIB1_A" \
+  && ok "ライブラリ 1 から知らないトラップ（.0.99）を送った" || ng "知らないトラップを送れない"
+fb() { zq value lib1 snmptrap.fallback | grep -q "99999.1.0.99"; }
+wait_for 30 "snmptrap.fallback に入った" fb
+wait_for 30 "障害：unmatched SNMP trap received" has_problem "Tape library lib1: unmatched SNMP trap received"
+echo "  （unmatched の障害は 10 分で消える。試験では待たない）"
+
 echo
-p=$(zq problems); [ -z "$p" ] && echo "  終わりの障害：0 件" || { echo "  終わりに残った障害："; echo "$p" | sed 's/^/    /'; }
+p=$(zq problems | grep -v "unmatched SNMP trap"); [ -z "$p" ] && echo "  終わりの障害：0 件" || { echo "  終わりに残った障害："; echo "$p" | sed 's/^/    /'; }
 echo
+tests/lib-cleanup.sh | sed "s/^/  後始末：/"
 if [ $FAILS = 0 ]; then echo "全部 OK"; else echo "NG が $FAILS 件"; fi
 exit $((FAILS > 0))

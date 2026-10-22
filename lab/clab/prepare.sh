@@ -95,8 +95,8 @@ else
   INIS="0x2000525400fc0101 0x2000525400fc0201 0x2000525400fc0104 0x2000525400fc0204"
   seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:01:01,52:54:00:fc:02:01"
   seed srv2 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:01:04,52:54:00:fc:02:04"
-  # 管理 API（REST :8080・SNMP :161）。トラップは監視局 mon（172.30.31.30）へ
-  seed lib1 "/opt/fcsim/lib-setup.sh -i 1 52:54:00:fc:01:02,52:54:00:fc:02:02 $INIS" "-traps 172.30.31.30:162"
-  seed lib2 "/opt/fcsim/lib-setup.sh -i 2 52:54:00:fc:01:03,52:54:00:fc:02:03 $INIS" "-traps 172.30.31.30:162"
+  # 管理 API（REST :8080・SNMP :161）。トラップは監視局 mon（172.30.31.30）と Zabbix のトラップ受信（.43:1162）へ
+  seed lib1 "/opt/fcsim/lib-setup.sh -i 1 52:54:00:fc:01:02,52:54:00:fc:02:02 $INIS" "-traps 172.30.31.30:162,172.30.31.43:1162"
+  seed lib2 "/opt/fcsim/lib-setup.sh -i 2 52:54:00:fc:01:03,52:54:00:fc:02:03 $INIS" "-traps 172.30.31.30:162,172.30.31.43:1162"
 fi
 echo "用意できた。sudo containerlab deploy -t lab/clab/$OUT"

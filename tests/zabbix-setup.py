@@ -119,6 +119,52 @@ def switch_template():
     return [ports, ns], [login_count], [rule], triggers
 
 
+T = "FCSIM Tape Library Traps"
+# Zabbix の SNMP トラップの項目は、トラップの本文（snmptraps のコンテナが書く。MIB を入れていないので OID は数字）を正規表現で選ぶ。
+# 1 つのトラップは、正規表現に合う項目の全部に入る。[\s\S] は改行も含めた任意の 1 文字。
+TRAP_STATUS = r"99999\.1\.0\.1\s"
+TRAP_ALERT = r"99999\.1\.0\.4\s"
+
+
+def trap_template():
+    drv = "{#SNMPINDEX}"
+    BS = "\\"   # バックスラッシュ 1 文字
+    # 項目キーの引用の中では \ はそのまま（正規表現の \. になる）。式の文字列の中では \ と " を \\ と \" で書く
+    key = 'snmptrap["99999' + BS + '.1' + BS + '.2' + BS + '.1' + BS + '.1' + BS + '.' + drv + ' = "]'
+    def zstr(regex):  # 正規表現を、トリガーの式の文字列にする
+        return '"' + regex.replace(BS, BS + BS).replace('"', BS + '"') + '"'
+    STATUS_IS = "99999" + BS + ".1" + BS + ".1" + BS + ".4" + BS + ".0 = "
+    items = [
+        dict(name="Trap: library status change", key_=f'snmptrap["{TRAP_STATUS}"]'),
+        dict(name="Trap: drive alert (any drive)", key_=f'snmptrap["{TRAP_ALERT}"]'),
+        dict(name="Trap: drive load/unload, I/E slot", key_=r'snmptrap["99999\.1\.0\.[2356]\s"]'),
+        dict(name="Trap: unmatched", key_="snmptrap.fallback"),
+    ]
+    # 状態：offline(2) のトラップで障害、online(1) のトラップで解消（find の期間を省くと最後の値だけを見る）
+    triggers = [
+        dict(description="Tape library {HOST.NAME} went offline (SNMP trap)", priority=4,
+             expression=f'find(/{T}/snmptrap["{TRAP_STATUS}"],,"regexp",{zstr(STATUS_IS + "2")})=1',
+             recovery_mode=1,
+             recovery_expression=f'find(/{T}/snmptrap["{TRAP_STATUS}"],,"regexp",{zstr(STATUS_IS + "1")})=1'),
+        dict(description="Tape library {HOST.NAME}: unmatched SNMP trap received", priority=1,
+             expression=f"count(/{T}/snmptrap.fallback,10m)>0"),
+    ]
+    # ドライブごと：SNMP でドライブを発見し、そのドライブの番号が入ったトラップを受ける
+    alert_on = zstr('2' + BS + '.1' + BS + '.6' + BS + '.' + drv + ' = "[0-9]')
+    alert_off = zstr('2' + BS + '.1' + BS + '.6' + BS + '.' + drv + ' = ""')
+    rule = dict(
+        name="Drives (traps)", key_="fcsim.trapdrives.discovery", delay="1m", type=20,
+        snmp_oid=f"discovery[{{#SERIAL}},{E}.2.1.2]",
+        item_prototypes=[dict(name="Trap: drive {#SNMPINDEX} ({#SERIAL}) TapeAlert", key_=key, type=17, value_type=2)],
+        trigger_prototypes=[dict(
+            description="Drive {#SNMPINDEX} ({#SERIAL}) on {HOST.NAME}: TapeAlert raised (SNMP trap)", priority=3,
+            expression=f'find(/{T}/{key},,"regexp",{alert_on})=1',
+            recovery_mode=1,
+            recovery_expression=f'find(/{T}/{key},,"regexp",{alert_off})=1')],
+    )
+    return items, triggers, rule
+
+
 # ---- Zabbix に入れる ----
 
 def jsonpath_pre(path):
@@ -213,10 +259,23 @@ def build(z):
     for t in triggers:
         z.call("trigger.create", t)
     sw_tid = tid
-    # ホスト
+    # トラップ
+    tid = ensure_template(z, T, tgid)
+    items, triggers, rule = trap_template()
+    for it in items:
+        z.call("item.create", it | {"hostid": tid, "type": 17, "value_type": 2})
+    rid = z.call("discoveryrule.create", {k: v for k, v in rule.items() if not k.endswith("_prototypes")} | {"hostid": tid})["itemids"][0]
+    for ip in rule["item_prototypes"]:
+        z.call("itemprototype.create", ip | {"hostid": tid, "ruleid": rid})
+    for tp in rule["trigger_prototypes"]:
+        z.call("triggerprototype.create", tp)
+    for t in triggers:
+        z.call("trigger.create", t)
+    trap_tid = tid
+    # ホスト（トラップは送り元の IP がホストの SNMP のインタフェースと一致するもので受ける）
     hosts = [
-        ("lib1", "172.30.31.22", [snmp_tid, lib_rest_tid], True),
-        ("lib2", "172.30.31.23", [snmp_tid, lib_rest_tid], True),
+        ("lib1", "172.30.31.22", [snmp_tid, lib_rest_tid, trap_tid], True),
+        ("lib2", "172.30.31.23", [snmp_tid, lib_rest_tid, trap_tid], True),
         ("fab-a", "172.30.31.10", [sw_tid], False),
         ("fab-b", "172.30.31.11", [sw_tid], False),
     ]
@@ -232,7 +291,7 @@ def build(z):
     # 既定の「Zabbix server」ホスト（エージェントが無いので障害になる）は消す
     for h in z.call("host.get", {"filter": {"host": ["Zabbix server"]}}):
         z.call("host.delete", [h["hostid"]])
-    print("Zabbix に入れた：テンプレート 3、ホスト", ", ".join(h[0] for h in hosts))
+    print("Zabbix に入れた：テンプレート 4、ホスト", ", ".join(h[0] for h in hosts))
 
 
 if __name__ == "__main__":

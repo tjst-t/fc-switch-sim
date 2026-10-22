@@ -54,6 +54,7 @@ for ip in "${LIBS[@]}"; do
   wait_for 300 "$ip の REST が答える" rest $ip library
 done
 
+tests/lib-cleanup.sh >/dev/null 2>&1 || true   # 前の試験で投入したテープが残っていれば出す（保管スロットがあふれないように）
 step "1. REST と SNMP"
 for ip in "${LIBS[@]}"; do
   L=$(rest $ip library)
@@ -131,5 +132,6 @@ curl -s -m 10 -X PUT http://$IP2:8080/api/v1/drives/1/tapealert -d '{"flags":[]}
 echo
 echo "  届いたトラップ：$(traps | wc -l) 件"
 echo
+tests/lib-cleanup.sh | sed "s/^/  後始末：/"
 if [ $FAILS = 0 ]; then echo "全部 OK"; else echo "NG が $FAILS 件"; fi
 exit $((FAILS > 0))

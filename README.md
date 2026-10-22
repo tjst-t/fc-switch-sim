@@ -170,6 +170,19 @@ lab/clab/zabbix.sh down
 スイッチ B の停止（`docker pause`、約 1 分で上がる）、サーバがテープを入れるとドライブの値が変わる。2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。
 スイッチにはまだ SNMP もトラップも無い（REST だけ）。
 
+### SNMP トラップ
+
+- Zabbix 公式のトラップ受信（`zabbix-snmptraps`、172.30.31.43:1162）が受け、共有のボリュームのファイルで Zabbix サーバに渡す（`ZBX_ENABLE_SNMP_TRAPS=true`）。
+  ライブラリの libmgr は、監視局 mon と、このトラップ受信の両方へ送る。トラップは送り元の IP がホストの SNMP のインタフェースと一致するホストに入る。
+- テンプレート `FCSIM Tape Library Traps`：トラップの本文を正規表現で選ぶ項目（状態の変化・TapeAlert・出し入れとメールスロット・どれにも当たらないもの）。
+  - 「went offline (SNMP trap)」：offline のトラップで立ち、online のトラップで消える（回復の条件を別に持つ）。
+  - 「Drive N ... TapeAlert raised (SNMP trap)」：SNMP でドライブを発見し、そのドライブの番号を含むトラップを受ける項目をドライブごとに作る。
+    フラグのあるトラップで立ち、空のトラップで消える。同じドライブのテープの出し入れのトラップでは変わらない。
+  - 知らないトラップは `snmptrap.fallback` に入り、10 分間「unmatched SNMP trap received」（情報）。
+- トリガーの式の文字列の中では、正規表現の `\` と `"` をさらに `\\` と `\"` で書く（`tests/zabbix-setup.py` の `zstr`）。
+- 試験（`tests/e2e-zabbix.sh` の 8）：2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。
+- 試験で投入したテープは `tests/lib-cleanup.sh` でライブラリから出す（試験の最初と最後に流す）。出さないと保管スロットがあふれ、テープを移せなくなる。
+
 ## 動かし方（直結の試験の場）
 
 ```
