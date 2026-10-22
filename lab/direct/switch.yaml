@@ -1,0 +1,11 @@
+# 直結の試験の場のスイッチ（ファブリック A）
+name: fab-a
+switchWWN: "10:00:00:05:1e:fc:00:01"
+domainID: 1
+fkaPeriodMs: 8000
+ports:
+  - interface: tap-srv   # ポート 0：サーバ
+  - interface: tap-lib   # ポート 1：テープライブラリ
+zoning:
+  defaultZone: allaccess
+  zones: []

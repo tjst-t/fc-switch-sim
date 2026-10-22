@@ -1,0 +1,41 @@
+#cloud-config
+# 試作の VM の共通イメージ（サーバ・テープライブラリの両方に使う）。
+hostname: fcsim-base
+ssh_pwauth: true
+users:
+  - name: lab
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    plain_text_passwd: lab
+    ssh_authorized_keys:
+      - __SSH_PUBKEY__
+package_update: true
+packages:
+  - fcoe-utils
+  - targetcli-fb
+  - sg3-utils
+  - lsscsi
+  - mtx
+  - mt-st
+  - tcpdump
+  - git
+  - build-essential
+  - zlib1g-dev
+  - libudev-dev
+  - liblz4-dev
+  - linux-headers-amd64
+  - jq
+  - ethtool
+runcmd:
+  - [sh, -c, 'apt-get install -y linux-headers-$(uname -r) > /var/log/fcsim-headers.log 2>&1 || true']
+  # mhVTL：リリース版に固定（master は 2026-10-21 にリンクに失敗した）。
+  # SG の数を 1024 に（既定の 128 では LIO pscsi が 1MB 以上のブロックを組めない）。
+  # make install は restorecon（SELinux）を呼ぶので、何もしないものを置く。
+  - [sh, -c, 'printf "#!/bin/sh\nexit 0\n" > /usr/local/sbin/restorecon && chmod +x /usr/local/sbin/restorecon']
+  - [sh, -c, 'cd /usr/local/src && git clone -q --depth 1 --branch 1.8-0_release https://github.com/markh794/mhvtl.git > /var/log/fcsim-mhvtl.log 2>&1']
+  - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && sed -i "s/^#define SCSI_MAX_SG_CHAIN_SEGMENTS SG_ALL/#define SCSI_MAX_SG_CHAIN_SEGMENTS 1024/" mhvtl.c']
+  - [sh, -c, 'cd /usr/local/src/mhvtl && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
+  - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
+  - [sh, -c, 'echo done > /var/log/fcsim-build-done']
+  - [poweroff]
