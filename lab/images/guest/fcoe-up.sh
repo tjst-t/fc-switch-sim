@@ -2,7 +2,15 @@
 # VM の中で：FC 用の NIC で FCoE（ファブリックモード、VLAN 無し）を有効にする。
 #   fcoe-up.sh <NIC> [MTU]
 set -euo pipefail
-NIC=${1:?NIC}; MTU=${2:-9000}
+# NIC は名前（ens4）でも MAC（52:54:00:fc:00:01）でも渡せる
+resolve_nic() {
+  case "$1" in
+    *:*:*:*:*:*) ip -o link | awk -v m="$(echo "$1" | tr A-F a-f)" 'index($0, "link/ether " m) {sub(":$", "", $2); print $2; exit}' ;;
+    *) echo "$1" ;;
+  esac
+}
+NIC=$(resolve_nic "${1:?NIC}"); MTU=${2:-9000}
+[ -n "$NIC" ] || { echo "NIC $1 が見つからない" >&2; exit 2; }
 ip link set "$NIC" mtu "$MTU" up
 # ソフトウェア FCoE はスキャッタギャザーが使えると、データのページをコピーせず NIC に渡す。
 # st（テープ）の大きなバッファのページでこれをすると、1MB 以上のブロックでカーネルが落ちた

@@ -1,0 +1,73 @@
+# FC のテープライブラリの最小の構成：サーバ 1 台・テープライブラリ 1 台・FC スイッチ 1 台（ファブリック A）
+#
+#   srv1（qemu-bmc の VM）eth1 ──── eth1 fab-a（fcsw）eth2 ──── eth1 lib1（qemu-bmc の VM、mhVTL）
+#
+# 先に ./prepare.sh（VM のディスクと cloud-init の種を作る）。
+#   VM への ssh：ssh -i ../../.cache/id_lab lab@172.30.30.21（srv1）・.22（lib1）
+#   スイッチの API：http://172.30.30.10:8080/api/v1/
+#   BMC：https://172.30.30.21/redfish/v1（admin / password）
+name: fctape
+
+mgmt:
+  network: fctape-mgmt
+  ipv4-subnet: 172.30.30.0/24
+
+topology:
+  kinds:
+    linux:
+      image: ghcr.io/tjst-t/qemu-bmc:0.8
+  nodes:
+    fab-a:
+      kind: linux
+      image: fc-switch-sim/fcsw:dev
+      mgmt-ipv4: 172.30.30.10
+      binds:
+        - switch-a.yaml:/etc/fcsw/switch.yaml:ro
+
+    srv1:
+      kind: linux
+      mgmt-ipv4: 172.30.30.21
+      devices: [/dev/net/tun, /dev/kvm]
+      binds:
+        - run/srv1:/vm
+        - __CACHE__:__CACHE__:ro
+      env:
+        VM_MEMORY: "4096"
+        VM_CPUS: "2"
+        VM_BOOT_MODE: bios
+        VM_CDROM: /vm/seed.iso
+        VM_NETWORKS: eth1
+        VM_MACS: "52:54:00:fc:00:01"
+        POWER_ON_AT_START: "true"
+        IPMI_USER: admin
+        IPMI_PASS: password
+        # VM への ssh 用の管理の NIC（コンテナの 22 番に転送）
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+      exec: &mtufix
+        # 回避策：qemu-bmc が作る TAP・ブリッジは MTU 1500 のままなので上げる（FCoE は 2158 バイト）。
+        # qemu-bmc に MTU の設定が入ったら外す。
+        - sh -c 'for i in $(seq 1 120); do ip link show tap0 >/dev/null 2>&1 && ip link show br0 >/dev/null 2>&1 && break; sleep 1; done; ip link set eth1 mtu 9500; ip link set tap0 mtu 9500; ip link set br0 mtu 9500; ip -br link show br0'
+
+    lib1:
+      kind: linux
+      mgmt-ipv4: 172.30.30.22
+      devices: [/dev/net/tun, /dev/kvm]
+      binds:
+        - run/lib1:/vm
+        - __CACHE__:__CACHE__:ro
+      env:
+        VM_MEMORY: "4096"
+        VM_CPUS: "2"
+        VM_BOOT_MODE: bios
+        VM_CDROM: /vm/seed.iso
+        VM_NETWORKS: eth1
+        VM_MACS: "52:54:00:fc:00:02"
+        POWER_ON_AT_START: "true"
+        IPMI_USER: admin
+        IPMI_PASS: password
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+      exec: *mtufix
+
+  links:
+    - endpoints: ["srv1:eth1", "fab-a:eth1"]
+    - endpoints: ["lib1:eth1", "fab-a:eth2"]

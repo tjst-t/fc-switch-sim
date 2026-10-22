@@ -34,6 +34,9 @@ type Port struct {
 	lastENodeKA  time.Time
 	lastAdv      time.Time
 	lastCVL      time.Time
+	// needReset：ポートを無効にしてログインを切った。ENode が切断に気づかずにいることがあるので、
+	// 有効に戻したあと ENode の声が聞こえたら、やり直しを求める。
+	needReset bool
 
 	Counters PortCounters
 }
@@ -278,12 +281,33 @@ func (s *Switch) handleFIP(p *Port, src net.HardwareAddr, pkt fip.Packet) {
 	case pkt.Op == fip.OpLS && pkt.Sub == fip.SubLSReq:
 		s.handleLSReq(p, src, pkt)
 	case pkt.Op == fip.OpCtrl && pkt.Sub == fip.SubKeepAlive:
-		if p.ENodeMAC == nil {
-			// スイッチが再起動したあと：キープアライブで ENode を知る。
-			p.ENodeMAC = src
+		// ENode の MAC は MAC の記述子から取る。VN_Port のキープアライブは VN_Port の MAC（FPMA）から届くので、
+		// 送り元をそのまま ENode の MAC とみなすと、Clear Virtual Link を違う宛先に送ってしまう。
+		enode := src
+		if v, ok := pkt.Find(fip.DTMAC); ok {
+			if m, ok := fip.ReadMAC(v); ok {
+				enode = m
+			}
 		}
-		if bytes.Equal(src, p.ENodeMAC) {
-			p.lastENodeKA = s.now()
+		if p.ENodeMAC == nil {
+			// スイッチが再起動したあと・ポートを有効に戻したあと：キープアライブで ENode を知る。
+			p.ENodeMAC = enode
+		}
+		if !bytes.Equal(enode, p.ENodeMAC) {
+			return
+		}
+		p.lastENodeKA = s.now()
+		if v, ok := pkt.Find(fip.DTVNID); ok {
+			// VN_Port のキープアライブ：ログインしていない VN_Port なら、その VN_Port の Clear Virtual Link（FC-BB-5）。
+			if vn, ok := fip.ReadVNID(v); ok {
+				if l := s.logins[vn.ID]; l == nil || l.Port != p.Index || l.WWPN != vn.WWPN {
+					s.sendCVL(p, []fip.Descriptor{fip.VNID(vn.MAC, vn.ID, vn.WWPN)}, "ログインしていない VN_Port のキープアライブ")
+				}
+			}
+			return
+		}
+		if p.needReset && len(s.loginsOnPort(p.Index)) == 0 {
+			s.resetUnknownENode(p)
 		}
 	case pkt.Op == fip.OpVLAN && pkt.Sub == fip.SubVLANReq:
 		// VLAN は使わない（タグ無しの FCoE）。ENode 側は VLAN の自動発見を切っておく。
@@ -376,6 +400,7 @@ func (s *Switch) handleLSReq(p *Port, src net.HardwareAddr, pkt fip.Packet) {
 		if l.NPIV {
 			kind = "FDISC"
 		}
+		p.needReset = false
 		s.event("login", p.Index, "%s：WWPN %s に FC_ID %s を割り当てた", kind, l.WWPN, id)
 		s.rscnFor(l)
 	case fip.DTLOGO:
@@ -437,9 +462,15 @@ func (s *Switch) resetUnknownENode(p *Port) {
 		return
 	}
 	p.lastCVL = s.now()
-	pkt := fip.Packet{Op: fip.OpCtrl, Sub: fip.SubClearVLink, Descs: []fip.Descriptor{fip.MAC(p.tr.MAC()), fip.Name(s.cfg.SwitchWWN)}}
+	s.sendCVL(p, nil, "ログインしていない VN_Port がいる")
+}
+
+// sendCVL は ENode に Clear Virtual Link を送る。vns が空なら ENode の全部の VN_Port のやり直しを求める。
+func (s *Switch) sendCVL(p *Port, vns []fip.Descriptor, why string) {
+	descs := append([]fip.Descriptor{fip.MAC(p.tr.MAC()), fip.Name(s.cfg.SwitchWWN)}, vns...)
+	pkt := fip.Packet{Op: fip.OpCtrl, Sub: fip.SubClearVLink, Descs: descs}
 	s.send(p, pkt.Build(p.ENodeMAC, p.tr.MAC(), 0), false)
-	s.event("clear-vlink", p.Index, "ログインしていない VN_Port から届いたので、ENode %s にやり直しを求めた", p.ENodeMAC)
+	s.event("clear-vlink", p.Index, "ENode %s にやり直しを求めた（%s）", p.ENodeMAC, why)
 }
 
 func (s *Switch) removeLogin(l *Login, why string) {

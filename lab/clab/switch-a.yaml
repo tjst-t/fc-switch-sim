@@ -1,0 +1,16 @@
+# ファブリック A のスイッチ（ContainerLab のリンク eth1・eth2 がポート 0・1）
+name: fab-a
+switchWWN: "10:00:00:05:1e:fc:00:01"
+domainID: 1
+fkaPeriodMs: 8000
+ports:
+  - interface: eth1   # ポート 0：srv1
+  - interface: eth2   # ポート 1：lib1
+zoning:
+  defaultZone: noaccess
+  aliases:
+    srv1: ["20:00:52:54:00:fc:00:01"]
+    lib1: ["20:00:52:54:00:fc:00:02"]
+  zones:
+    - name: z_srv1_lib1
+      members: [srv1, lib1]

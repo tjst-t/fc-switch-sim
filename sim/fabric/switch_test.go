@@ -321,3 +321,47 @@ func TestPortDisableSendsCVL(t *testing.T) {
 		t.Fatalf("無効のポートが答えた")
 	}
 }
+
+func TestVNPortKeepAliveDoesNotChangeENodeMAC(t *testing.T) {
+	sw, trs := newTestSwitch(t, 1, Zoning{})
+	host := newENode(t, sw, trs, 0, hostWWPN)
+	host.login(false)
+	// ポートを無効・有効にすると ENode の MAC を忘れる。
+	_ = sw.SetPortEnabled(0, false)
+	_ = sw.SetPortEnabled(0, true)
+	trs[0].take()
+	// VN_Port のキープアライブ（送り元は VN_Port の MAC、MAC の記述子は ENode の MAC）
+	host.sw.Receive(0, fip.Packet{Op: fip.OpCtrl, Sub: fip.SubKeepAlive,
+		Descs: []fip.Descriptor{fip.MAC(host.mac), fip.VNID(host.vnmac, host.fcid, host.wwpn)}}.Build(trs[0].mac, host.vnmac, 0))
+	if got := sw.Ports()[0].ENodeMAC; got != host.mac.String() {
+		t.Fatalf("ENode の MAC が %s になった（%s のはず）", got, host.mac)
+	}
+}
+
+func TestReenabledPortResetsStaleENode(t *testing.T) {
+	sw, trs := newTestSwitch(t, 1, Zoning{})
+	host := newENode(t, sw, trs, 0, hostWWPN)
+	host.login(false)
+	_ = sw.SetPortEnabled(0, false)
+	_ = sw.SetPortEnabled(0, true)
+	trs[0].take()
+	// CVL を取りこぼした ENode が、まだログインしているつもりで ENode のキープアライブを送る
+	sw.Receive(0, fip.Packet{Op: fip.OpCtrl, Sub: fip.SubKeepAlive, Descs: []fip.Descriptor{fip.MAC(host.mac)}}.Build(trs[0].mac, host.mac, 0))
+	out := trs[0].take()
+	if len(out) != 1 {
+		t.Fatalf("CVL が 1 つ返るはず：%d", len(out))
+	}
+	if p, _ := fip.Parse(out[0][14:]); p.Op != fip.OpCtrl || p.Sub != fip.SubClearVLink {
+		t.Fatalf("CVL でない")
+	}
+	// VN_Port のキープアライブにも、その VN_Port の CVL
+	sw.Receive(0, fip.Packet{Op: fip.OpCtrl, Sub: fip.SubKeepAlive, Descs: []fip.Descriptor{fip.MAC(host.mac), fip.VNID(host.vnmac, host.fcid, host.wwpn)}}.Build(trs[0].mac, host.vnmac, 0))
+	out = trs[0].take()
+	if len(out) != 1 {
+		t.Fatalf("VN_Port の CVL が返らない")
+	}
+	p, _ := fip.Parse(out[0][14:])
+	if _, ok := p.Find(fip.DTVNID); !ok {
+		t.Fatalf("VN_Port の記述子が無い")
+	}
+}

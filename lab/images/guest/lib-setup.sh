@@ -3,7 +3,15 @@
 #   lib-setup.sh <NIC> <許すイニシエータの WWPN（0x... か naa.…）>...
 # 順番が大事：ターゲットを作ってから FCoE を有効にする（あとからだと相手の libfc が古い役割を覚えたままになる）。
 set -euo pipefail
-NIC=${1:?NIC}; shift
+# NIC は名前（ens4）でも MAC（52:54:00:fc:00:01）でも渡せる
+resolve_nic() {
+  case "$1" in
+    *:*:*:*:*:*) ip -o link | awk -v m="$(echo "$1" | tr A-F a-f)" 'index($0, "link/ether " m) {sub(":$", "", $2); print $2; exit}' ;;
+    *) echo "$1" ;;
+  esac
+}
+NIC=$(resolve_nic "${1:?NIC}"); shift
+[ -n "$NIC" ] || { echo "NIC $1 が見つからない" >&2; exit 2; }
 [ $# -ge 1 ] || { echo "イニシエータの WWPN が要る" >&2; exit 2; }
 # やり直しのときは、先に FCoE を外す（使用中のターゲットを消すと tcm_fc が固まることがある）
 if [ -d /sys/class/fc_host ] && ls /sys/class/fc_host/ 2>/dev/null | grep -q host; then

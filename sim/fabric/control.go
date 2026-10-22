@@ -165,6 +165,9 @@ func (s *Switch) SetPortEnabled(idx int, enabled bool) error {
 		s.sendAdv(p, nil, false)
 		return nil
 	}
+	if len(s.loginsOnPort(p.Index)) > 0 {
+		p.needReset = true
+	}
 	s.clearPort(p, true, "ポートを無効にした")
 	p.Enabled = false
 	p.ENodeMAC = nil

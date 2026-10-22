@@ -16,7 +16,7 @@ FC スイッチ（FCoE の FCF）のシミュレーター。仮想マシンの L
 | 転送 | ログインした VN_Port どうしの FCoE のフレームを、宛先の FC_ID で転送する（送り元の MAC と FC_ID を確かめる） |
 | ゾーニング | WWPN とエイリアスで書く。ネームサーバの答えを絞り、ゾーンの外へのフレームは捨てる（ハードゾーニング）。変えると RSCN |
 | ポート | 有効・無効（無効にするとログインを Clear Virtual Link で切る） |
-| 復旧 | スイッチが再起動したあと、ログインしていない VN_Port から届いたら、その ENode にやり直しを求める |
+| 復旧 | ログインしていない VN_Port からフレームやキープアライブが届いたら、Clear Virtual Link でやり直しを求める（スイッチの再起動のあと、ポートを有効に戻したあと） |
 | API | HTTP の JSON（`sim/api/api.go` の頭に一覧） |
 
 ## 構成
@@ -52,6 +52,28 @@ lab/direct/      直結の試験の場：VM 2 台を TAP でスイッチにつ�
 - mhVTL の仮想テープの容量は既定で 500MB（`/etc/mhvtl/mhvtl.conf` の `CAPACITY`）。
 - `st` は書き込みのあと閉じるときにファイルマークを書く。`mt weof` を重ねると空のファイルが挟まる。
 
+## ContainerLab の構成（lab/clab/fc-tape.clab.yml）
+
+```
+srv1（qemu-bmc の VM）eth1 ──── eth1 fab-a（fcsw のコンテナ）eth2 ──── eth1 lib1（qemu-bmc の VM、mhVTL）
+```
+
+- VM は `ghcr.io/tjst-t/qemu-bmc:0.8`。Redfish・IPMI で電源を操作できる（`https://172.30.30.21/redfish/v1`、admin / password）。
+- VM は cloud-init で起動時に FC の設定まで済ませる（サーバ：`fcoe-up.sh`、ライブラリ：`lib-setup.sh`）。
+- VM への ssh：`ssh -i .cache/id_lab lab@172.30.30.21`（srv1）・`.22`（lib1）。スイッチの API：`http://172.30.30.10:8080/api/v1/`。
+- **回避策：** qemu-bmc 0.8 は VM の NIC の TAP・ブリッジの MTU を 1500 のままにするので、exec で 9500 に上げている。qemu-bmc 0.9 の `VM_NET_MTU` が出たら置き換える。
+
+```
+lab/images/build-base.sh                         # 共通イメージ（初回だけ）
+lab/clab/prepare.sh                              # スイッチのイメージ・VM のディスクと cloud-init の種
+sudo containerlab deploy -t lab/clab/run.clab.yml
+tests/e2e.sh                                     # 通しの試験（--deploy で作り直しから、--destroy で最後に壊す）
+sudo containerlab destroy -t lab/clab/run.clab.yml --cleanup
+```
+
+通しの試験（`tests/e2e.sh`）が確かめること：ログインと FC_ID、ロボットとドライブ 4 台が見える、テープの読み書き（256KB・1MB・2MB で一致）、ゾーンから外すと消え戻すと戻る、ポートを無効にすると消え有効にすると戻る、Redfish で電源の状態が読める。
+2026-10-22 に、作り直しから 1 回と、同じ構成のまま 2 回、全部 OK。
+
 ## 動かし方（直結の試験の場）
 
 ```
@@ -72,6 +94,6 @@ curl -X POST localhost:8080/api/v1/ports/1/disable
 
 ## これから
 
-- ContainerLab に載せる（スイッチをコンテナに、サーバとライブラリを qemu-bmc の VM ノードに）。qemu-bmc の TAP・ブリッジの MTU の修正が要る。
-- 共通イメージに mhVTL の版の固定と修正を入れる（いまは試験の場の VM の中で手で直した）。
-- 試験を自動にする（`tests/`）。
+- qemu-bmc 0.9 の `VM_NET_MTU` に切り替え、MTU の回避策を外す。
+- 複数のサーバ・ライブラリ、ファブリック A と B の冗長構成。
+- ライブラリの管理 API（SNMP など）の模擬、ベンダーの CLI・API の皮。

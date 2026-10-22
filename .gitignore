@@ -1,3 +1,6 @@
 /bin/
 /.cache/
 /lab/run/
+/lab/clab/run/
+/lab/clab/run.clab.yml
+/lab/clab/clab-*/
