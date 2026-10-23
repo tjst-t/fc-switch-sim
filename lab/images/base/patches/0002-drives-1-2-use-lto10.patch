@@ -1,0 +1,48 @@
+From 38425d0c9dbf7835336f50547790d7fd13bd31c8 Mon Sep 17 00:00:00 2001
+From: a <a@a>
+Date: Fri, 23 Oct 2026 00:45:09 +0000
+Subject: [PATCH] local: drives 1-2 (library 10) use LTO-10 media
+
+---
+ etc/generate_device_conf.in      | 4 ++--
+ etc/generate_library_contents.in | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/etc/generate_device_conf.in b/etc/generate_device_conf.in
+index af37ec4..b79986f 100644
+--- a/etc/generate_device_conf.in
++++ b/etc/generate_device_conf.in
+@@ -403,8 +403,8 @@ add_library_contents_10()
+ 	#         index channel target LUN Vendor ProdID ProdRev S/No
+ 	add_library 10 0 0 0 "STK" "L700"  "550V"  "XYZZY_A"
+ 	#         index channel target LUN S/No Lib# Slot
+-	add_ibm_ultrium_8_drive 11 0 1 0 "XYZZY_A1" 10 1
+-	add_ibm_ultrium_8_drive 12 0 2 0 "XYZZY_A2" 10 2
++	add_ibm_ultrium_10_drive 11 0 1 0 "XYZZY_A1" 10 1
++	add_ibm_ultrium_10_drive 12 0 2 0 "XYZZY_A2" 10 2
+ 	add_ibm_ultrium_6_drive 13 0 3 0 "XYZZY_A3" 10 3
+ 	add_ibm_ultrium_6_drive 14 0 4 0 "XYZZY_A4" 10 4
+ }
+diff --git a/etc/generate_library_contents.in b/etc/generate_library_contents.in
+index 2831414..902c75f 100644
+--- a/etc/generate_library_contents.in
++++ b/etc/generate_library_contents.in
+@@ -89,12 +89,12 @@ CONF_SAMPLE
+ 	# create the data in the file
+ 	case $LIBID in
+ 	'10')
+-		# LTO-8 Media
++		# LTO-10 Media (drives 1-2; LTO-10 does not read earlier generations)
+ 		for a in {1..20} ; do
+-			printf "Slot $a: E0%02d%02dL8\n" $LIBID $a
++			printf "Slot $a: E0%02d%02dLA\n" $LIBID $a
+ 		done
+ 		printf "Slot 21: \n"
+-		printf "Slot 22: CLN%02d1L8\n" $LIBID
++		printf "Slot 22: CLN%02d1LA\n" $LIBID
+ 		printf "Slot 23: CLN%02d2L6\n" $LIBID
+ 		for a in {24..29} ; do
+ 			printf "Slot $a:\n"
+-- 
+2.43.0
+

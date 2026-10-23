@@ -1,0 +1,748 @@
+From f44dc9f87d35d511e65734f6d92ebdc5dc527a1b Mon Sep 17 00:00:00 2001
+From: Matej Kenda <matejken@gmail.com>
+Date: Mon, 27 Jul 2026 17:00:12 +0200
+Subject: [PATCH] feat(lto10): add Ultrium 10 and Ultrium 10 Premium
+
+Density codes 0x62 and 0x63, medium types 0xa8, 0xa9 and 0xac, and the
+ULT3580-TDA personality, which takes Ultrium 10 media only: generation 10 is
+not compatible with earlier cartridges. Values from the IBM LTO SCSI Reference
+GA32-0928-08.
+
+(cherry picked from commit 1cd21f737dde4d48b99f5eccfb38bdaeaa2d9711)
+---
+ etc/generate_device_conf.in      |  45 +++++++
+ etc/generate_library_contents.in |   4 +
+ include/ssc.h                    |   1 +
+ include/vtlcart.h                |   6 +-
+ include/vtllib.h                 |   8 ++
+ man/edit_tape.1.in               |   2 +-
+ man/mktape.1.in                  |   2 +
+ usr/cmd/edit_tape.c              |   2 +-
+ usr/cmd/make_vtl_media.in        |  35 +++---
+ usr/cmd/mktape.c                 |   1 +
+ usr/cmd/vtltape.c                |   4 +
+ usr/pm/default_ssc_pm.c          |  10 ++
+ usr/pm/ult3580_pm.c              | 106 +++++++++++++++-
+ usr/vtllib.c                     | 199 +++++++++++++++++++++++++++++--
+ 14 files changed, 397 insertions(+), 28 deletions(-)
+
+diff --git a/etc/generate_device_conf.in b/etc/generate_device_conf.in
+index 095532d..af37ec4 100644
+--- a/etc/generate_device_conf.in
++++ b/etc/generate_device_conf.in
+@@ -325,6 +325,51 @@ add_ibm_ultrium_8_drive()
+ 	add_drive $ID $CH $TARGET $LUN $VENDORID $PRODUCTID $PRODUCTREV $UNITSERNO $LIB $SLOT $DENSITY
+ }
+ 
++# add_ibm_ultrium_9_drive(DevID, Channel, Target, Lun, S/No, LibID, Slot)
++add_ibm_ultrium_9_drive()
++{
++	if (( $# != 7 )) ; then
++		echo "internal error: expected 7 arguments, got $#" 1>&2
++		exit 1
++	fi
++	ID=$1
++	CH=$2
++	TARGET=$3
++	LUN=$4
++	UNITSERNO=$5
++	LIB=$6
++	SLOT=$7
++	VENDORID="IBM"
++	PRODUCTID="ULT3580-TD9"
++	PRODUCTREV="2160"
++	DENSITY="60"
++
++	add_drive $ID $CH $TARGET $LUN $VENDORID $PRODUCTID $PRODUCTREV $UNITSERNO $LIB $SLOT $DENSITY
++}
++
++# add_ibm_ultrium_10_drive(DevID, Channel, Target, Lun, S/No, LibID, Slot)
++# Takes Ultrium 10 media only: barcodes ending LA, LH (WORM) or PA (Premium).
++add_ibm_ultrium_10_drive()
++{
++	if (( $# != 7 )) ; then
++		echo "internal error: expected 7 arguments, got $#" 1>&2
++		exit 1
++	fi
++	ID=$1
++	CH=$2
++	TARGET=$3
++	LUN=$4
++	UNITSERNO=$5
++	LIB=$6
++	SLOT=$7
++	VENDORID="IBM"
++	PRODUCTID="ULT3580-TDA"
++	PRODUCTREV="2160"
++	DENSITY="62"
++
++	add_drive $ID $CH $TARGET $LUN $VENDORID $PRODUCTID $PRODUCTREV $UNITSERNO $LIB $SLOT $DENSITY
++}
++
+ # add_stk_t10kb_drive(DevID, Channel, Target, Lun, S/No, LibID, Slot)
+ add_stk_t10kb_drive()
+ {
+diff --git a/etc/generate_library_contents.in b/etc/generate_library_contents.in
+index 1bf6293..2831414 100644
+--- a/etc/generate_library_contents.in
++++ b/etc/generate_library_contents.in
+@@ -68,6 +68,10 @@ MAP 4:
+ # Trailing "L1" - LTO 1, "L2" - LTO 2, "L3" - LTO 3, "L4" - LTO 4, "L5" - LTO 5
+ # Trailing "LT" - LTO 3 WORM, "LU" -  LTO 4 WORM, "LV" - LTO 5 WORM
+ # Trailing "L6" - LTO 6, "LW" - LTO 6 WORM
++# Trailing "L7" - LTO 7, "LX" - LTO 7 WORM
++# Trailing "L8" - LTO 8, "LY" - LTO 8 WORM
++# Trailing "L9" - LTO 9, "LZ" - LTO 9 WORM
++# Trailing "LA" - LTO 10, "LH" - LTO 10 WORM, "PA" - LTO 10 Premium
+ # Trailing "TA" - T10000+
+ # Trailing "TZ" - 9840A, "TY" - 9840B, "TX" - 9840C, "TW" - 9840D
+ # Trailing "TV" - 9940A, "TU" - 9940B
+diff --git a/include/ssc.h b/include/ssc.h
+index 1c499c3..fc40330 100644
+--- a/include/ssc.h
++++ b/include/ssc.h
+@@ -345,6 +345,7 @@ void init_ult3580_td6(struct lu_phy_attr *lu);
+ void init_ult3580_td7(struct lu_phy_attr *lu);
+ void init_ult3580_td8(struct lu_phy_attr *lu);
+ void init_ult3580_td9(struct lu_phy_attr *lu);
++void init_ult3580_tda(struct lu_phy_attr *lu);
+ void init_hp_ult_1(struct lu_phy_attr *lu);
+ void init_hp_ult_2(struct lu_phy_attr *lu);
+ void init_hp_ult_3(struct lu_phy_attr *lu);
+diff --git a/include/vtlcart.h b/include/vtlcart.h
+index 8f4d0f7..086f420 100644
+--- a/include/vtlcart.h
++++ b/include/vtlcart.h
+@@ -106,10 +106,11 @@ https://github.com/iustin/mt-st/blob/fbfd923faad0d6f613415f4de747833fb6b4a465/mt
+ #define medium_density_code_lto5	0x58
+ #define medium_density_code_lto6	0x5a
+ #define medium_density_code_lto7	0x5c
+-#define medium_density_code_lto7	0x5c
+ #define medium_density_code_lto8_m8 0x5d
+ #define medium_density_code_lto8	0x5e
+ #define medium_density_code_lto9	0x60
++#define medium_density_code_lto10	0x62
++#define medium_density_code_lto10p	0x63
+ 
+ #define medium_density_code_j1a		 0x51
+ #define medium_density_code_e05		 0x52
+@@ -184,6 +185,9 @@ https://github.com/iustin/mt-st/blob/fbfd923faad0d6f613415f4de747833fb6b4a465/mt
+ #define media_type_lto8_worm   0x8c
+ #define media_type_lto9_data   0x98
+ #define media_type_lto9_worm   0x9c
++#define media_type_lto10_data  0xa8
++#define media_type_lto10p_data 0xa9
++#define media_type_lto10_worm  0xac
+ #define media_type_hp_lto_data 0x00
+ #define media_type_hp_lto_worm 0x01
+ #define media_type_hp_lto_cd   0x80
+diff --git a/include/vtllib.h b/include/vtllib.h
+index 525f8f9..77a08c1 100644
+--- a/include/vtllib.h
++++ b/include/vtllib.h
+@@ -459,6 +459,14 @@ enum Media_Type_list {
+ 	Media_9940A_CLEAN,
+ 	Media_9940B,
+ 	Media_9940B_CLEAN,
++	/* New media types are appended here rather than grouped with their own
++	 * generation: the value is stored as MediaType in the MAM of every
++	 * cartridge, so inserting one would re-type existing media on disk.
++	 */
++	Media_LTO10,
++	Media_LTO10_CLEAN,
++	Media_LTO10_WORM,
++	Media_LTO10P,
+ 	Media_UNKNOWN /* always last */
+ };
+ 
+diff --git a/man/edit_tape.1.in b/man/edit_tape.1.in
+index 57e348f..b529fa0 100644
+--- a/man/edit_tape.1.in
++++ b/man/edit_tape.1.in
+@@ -30,7 +30,7 @@ The media 'type' which can be: "data" , "WORM" (Write Once Read Many) or
+ "clean" (cleaning cartridge)
+ .TP
+ \fB\-d density\fR
+-Media density. Can be one of LTO1, LTO2, LTO3, LTO4, LTO5, LTO6, LTO7, LTO8, LTO9, SDLT1, SDLT2, SDLT3, SDLT4, AIT1, AIT2, AIT3,
++Media density. Can be one of LTO1, LTO2, LTO3, LTO4, LTO5, LTO6, LTO7, LTO8, LTO9, LTO10, LTO10P, SDLT1, SDLT2, SDLT3, SDLT4, AIT1, AIT2, AIT3,
+ AIT4, T10KA, T10KB, T10KC, 9840A, 9840B, 9840C, 9840D, 9940A, 9940B, J1A, E05 and E06
+ 
+ The 'J1A, E05 and E06' media densities refer to the IBM 03592 media types.
+diff --git a/man/mktape.1.in b/man/mktape.1.in
+index 5c07c11..f4fd0fc 100644
+--- a/man/mktape.1.in
++++ b/man/mktape.1.in
+@@ -95,6 +95,8 @@ Can be one of
+ .BR LTO7 ,
+ .BR LTO8 ,
+ .BR LTO9 ,
++.BR LTO10 ,
++.BR LTO10P ,
+ .BR SDLT1 ,
+ .BR SDLT2 ,
+ .BR SDLT3 ,
+diff --git a/usr/cmd/edit_tape.c b/usr/cmd/edit_tape.c
+index 5e4ee53..e45c1ba 100644
+--- a/usr/cmd/edit_tape.c
++++ b/usr/cmd/edit_tape.c
+@@ -63,7 +63,7 @@ void usage(char *progname) {
+ 	printf("           SDLT1    SDLT220  SDLT320  SDLT600\n");
+ 	printf("           LTO1     LTO2     LTO3     LTO4\n");
+ 	printf("           LTO5     LTO6     LTO7     LTO8\n");
+-	printf("           LTO9\n");
++	printf("           LTO9     LTO10    LTO10P\n");
+ 	printf("           T10KA    T10KB    T10KC\n");
+ 	printf("           9840A    9840B    9840C    9840D\n");
+ 	printf("           9940A    9940B\n");
+diff --git a/usr/cmd/make_vtl_media.in b/usr/cmd/make_vtl_media.in
+index b3d26d8..65b2a22 100644
+--- a/usr/cmd/make_vtl_media.in
++++ b/usr/cmd/make_vtl_media.in
+@@ -55,8 +55,9 @@ set_media_type()
+ 	type=$1
+ 
+ 	e0_regex='[A-Z0-9]{6,8}([J])([WXY])$'
+-	lto_regex='[A-Z0-9]{6,8}([L])([TUVW])$'
+-
++	# LTO WORM cartridges are labelled LT, LU, LV, LW, LX, LY, LZ for
++	# generations 3 to 9, and LH for generation 10.
++	lto_regex='[A-Z0-9]{6,8}([L])([TUVWXYZH])$'
+ 	# default to data type
+ 	MEDIA_TYPE="data"
+ 
+@@ -85,23 +86,29 @@ set_density()
+ 
+ 	# I'm sure there is a better method then this...
+ 	# There is.. Thanks to Gavin Barnard.
+-	regex='[A-Z0-9]{6,8}([SLXTJD])([12345678ABKUVWXYZ])$'
+-	#regex='[A-Z0-9]{4,6}([SLXTJ])([123456ABWX])[0-9]*$' # for bacula
++	regex='[A-Z0-9]{6,8}([SLXTJDP])([123456789ABHKUVWXYZ])$'	#regex='[A-Z0-9]{4,6}([SLXTJ])([123456ABWX])[0-9]*$' # for bacula
+ 	DENSITY=UNKNOWN
+ 
+ 	if [[ $density =~ $regex ]]; then
+ 		#matches=${#BASH_REMATCH[*]}
+ 		if [ ${BASH_REMATCH[1]} = 'L' ]; then
+-			if [ ${BASH_REMATCH[2]} = 'T' ]; then
+-				DENSITY="LTO3"
+-			elif [ ${BASH_REMATCH[2]} = 'U' ]; then
+-				DENSITY="LTO4"
+-			elif [ ${BASH_REMATCH[2]} = 'V' ]; then
+-				DENSITY="LTO5"
+-			elif [ ${BASH_REMATCH[2]} = 'W' ]; then
+-				DENSITY="LTO6"
+-			else
+-				DENSITY="LTO${BASH_REMATCH[2]}"
++			# Data cartridges carry the generation digit, WORM cartridges
++			# a letter, and generation 10 uses 'A' for data and 'H' for WORM.
++			case ${BASH_REMATCH[2]} in
++			T)	DENSITY="LTO3" ;;
++			U)	DENSITY="LTO4" ;;
++			V)	DENSITY="LTO5" ;;
++			W)	DENSITY="LTO6" ;;
++			X)	DENSITY="LTO7" ;;
++			Y)	DENSITY="LTO8" ;;
++			Z)	DENSITY="LTO9" ;;
++			A|H)	DENSITY="LTO10" ;;
++			*)	DENSITY="LTO${BASH_REMATCH[2]}" ;;
++			esac
++		elif [ ${BASH_REMATCH[1]} = 'P' ]; then
++			# Ultrium 10 Premium (40TB) data cartridge
++			if [ ${BASH_REMATCH[2]} = 'A' ]; then
++				DENSITY="LTO10P"
+ 			fi
+ 		elif [ ${BASH_REMATCH[1]} = 'D' ]; then
+ 			if [ ${BASH_REMATCH[2]} = '7' ]; then
+diff --git a/usr/cmd/mktape.c b/usr/cmd/mktape.c
+index e0abdfa..75166e7 100644
+--- a/usr/cmd/mktape.c
++++ b/usr/cmd/mktape.c
+@@ -46,6 +46,7 @@ static void usage(char *progname) {
+ 	printf("           SDLT1    SDLT220  SDLT320  SDLT600\n");
+ 	printf("           LTO1     LTO2     LTO3     LTO4\n");
+ 	printf("           LTO5     LTO6     LTO7     LTO8\n");
++	printf("           LTO9     LTO10    LTO10P\n");
+ 	printf("           T10KA    T10KB    T10KC\n");
+ 	printf("           9840A    9840B    9840C    9840D\n");
+ 	printf("           9940A    9940B\n");
+diff --git a/usr/cmd/vtltape.c b/usr/cmd/vtltape.c
+index 2c34cff..e64a928 100644
+--- a/usr/cmd/vtltape.c
++++ b/usr/cmd/vtltape.c
+@@ -144,6 +144,8 @@ static struct tape_drives_table {
+ 	{"ULT3580-HH8     ", init_ult3580_td8},
+ 	{"ULT3580-TD9     ", init_ult3580_td9},
+ 	{"ULT3580-HH9     ", init_ult3580_td9},
++	{"ULT3580-TDA     ", init_ult3580_tda},
++	{"ULT3580-HHA     ", init_ult3580_tda},
+ 	{"ULTRIUM-TD1     ", init_ult3580_td1},
+ 	{"ULTRIUM-TD2     ", init_ult3580_td2},
+ 	{"ULTRIUM-HH2     ", init_ult3580_td2},
+@@ -161,6 +163,8 @@ static struct tape_drives_table {
+ 	{"ULTRIUM-HH8     ", init_ult3580_td8},
+ 	{"ULTRIUM-TD9     ", init_ult3580_td9},
+ 	{"ULTRIUM-HH9     ", init_ult3580_td9},
++	{"ULTRIUM-TDA     ", init_ult3580_tda},
++	{"ULTRIUM-HHA     ", init_ult3580_tda},
+ 	{"Ultrium 1-SCSI  ", init_hp_ult_1},
+ 	{"Ultrium 2-SCSI  ", init_hp_ult_2},
+ 	{"Ultrium 3-SCSI  ", init_hp_ult_3},
+diff --git a/usr/pm/default_ssc_pm.c b/usr/pm/default_ssc_pm.c
+index 853e025..1db497e 100644
+--- a/usr/pm/default_ssc_pm.c
++++ b/usr/pm/default_ssc_pm.c
+@@ -95,6 +95,14 @@ static struct name_to_media_info media_info[] = {
+ 	 media_type_lto9_data, medium_density_code_lto9},
+ 	{"LTO9 WORM", Media_LTO9_WORM,
+ 	 media_type_lto9_worm, medium_density_code_lto9},
++	{"LTO10", Media_LTO10,
++	 media_type_lto10_data, medium_density_code_lto10},
++	{"LTO10 Clean", Media_LTO10_CLEAN,
++	 media_type_lto10_data, medium_density_code_lto10},
++	{"LTO10 WORM", Media_LTO10_WORM,
++	 media_type_lto10_worm, medium_density_code_lto10},
++	{"LTO10P", Media_LTO10P,
++	 media_type_lto10p_data, medium_density_code_lto10p},
+ 
+ 	/* IBM 03592 media */
+ 	{"03592 JA", Media_3592_JA,
+@@ -446,6 +454,8 @@ void init_default_ssc(struct lu_phy_attr *lu) {
+ 	add_drive_media_list(lu, LOAD_RW, "LTO7");
+ 	add_drive_media_list(lu, LOAD_RW, "LTO8");
+ 	add_drive_media_list(lu, LOAD_RW, "LTO9");
++	add_drive_media_list(lu, LOAD_RW, "LTO10");
++	add_drive_media_list(lu, LOAD_RW, "LTO10P");
+ 
+ 	/* DDS media */
+ 	add_drive_media_list(lu, LOAD_RW, "DDS1");
+diff --git a/usr/pm/ult3580_pm.c b/usr/pm/ult3580_pm.c
+index 83a27a5..8ff4119 100644
+--- a/usr/pm/ult3580_pm.c
++++ b/usr/pm/ult3580_pm.c
+@@ -61,8 +61,18 @@ static struct density_info density_lto8 = {
+ 	20669, 127, 6656, 12000000, medium_density_code_lto8,
+ 	"LTO-CVE", "U-832", "Ultrium 8/32T"};
+ static struct density_info density_lto9 = {
+-	21456, 127, 8960, 18000000, medium_density_code_lto9,
+-	"LTO-CVE", "U-932", "Ultrium 9/48T"};
++	21459, 127, 8960, 18000000, medium_density_code_lto9,
++	"LTO-CVE", "U-932", "Ultrium 9/32T"};
++/* Ultrium 10 writes at two densities: 62h for the 30TB cartridge and 63h for
++ * the 40TB Premium cartridge. Values from the IBM LTO SCSI Reference,
++ * GA32-0928-08 table 114.
++ */
++static struct density_info density_lto10 = {
++	21657, 127, 15104, 30000000, medium_density_code_lto10,
++	"LTO-CVE", "U1032A", "Ultrium 10/32T"};
++static struct density_info density_lto10p = {
++	22441, 127, 15104, 40000000, medium_density_code_lto10p,
++	"LTO-CVE", "U1032P", "Ultrium 10/32T P"};
+ 
+ static struct name_to_media_info media_info[] = {
+ 	{"LTO1", Media_LTO1,
+@@ -115,6 +125,14 @@ static struct name_to_media_info media_info[] = {
+ 	 media_type_lto9_data, medium_density_code_lto9},
+ 	{"LTO9 WORM", Media_LTO9_WORM,
+ 	 media_type_lto9_worm, medium_density_code_lto9},
++	{"LTO10", Media_LTO10,
++	 media_type_lto10_data, medium_density_code_lto10},
++	{"LTO10 Clean", Media_LTO10_CLEAN,
++	 media_type_lto10_data, medium_density_code_lto10},
++	{"LTO10 WORM", Media_LTO10_WORM,
++	 media_type_lto10_worm, medium_density_code_lto10},
++	{"LTO10P", Media_LTO10P,
++	 media_type_lto10p_data, medium_density_code_lto10p},
+ 	{"", 0, 0, 0},
+ };
+ 
+@@ -263,6 +281,11 @@ static int encr_capabilities_ult(struct scsi_cmd *cmd) {
+ 			MHVTL_DBG(1, "LTO9 Medium - Setting AVFMV");
+ 			buf[24] |= 0x80; /* AVFMV */
+ 			break;
++		case Media_LTO10:
++		case Media_LTO10P:
++			MHVTL_DBG(1, "LTO10 Medium - Setting AVFMV");
++			buf[24] |= 0x80; /* AVFMV */
++			break;
+ 		default:
+ 			MHVTL_DBG(1, "Unable to set Encryption (AVFMV) bit on mounted media");
+ 			break;
+@@ -469,6 +492,12 @@ static uint8_t ult_media_load(struct lu_phy_attr *lu, int load) {
+ 		case Media_LTO9:
+ 			lu->mode_media_type = media_type_lto9_data;
+ 			break;
++		case Media_LTO10:
++			lu->mode_media_type = media_type_lto10_data;
++			break;
++		case Media_LTO10P:
++			lu->mode_media_type = media_type_lto10p_data;
++			break;
+ 		default:
+ 			lu->mode_media_type = 0;
+ 		}
+@@ -504,6 +533,7 @@ static char *pm_name_lto6 = "LTO-6";
+ static char *pm_name_lto7 = "LTO-7";
+ static char *pm_name_lto8 = "LTO-8";
+ static char *pm_name_lto9 = "LTO-9";
++static char *pm_name_lto10 = "LTO-10";
+ 
+ static struct ssc_personality_template ssc_pm = {
+ 	.valid_encryption_blk = valid_encryption_blk, /* default in ssc.c */
+@@ -1119,3 +1149,75 @@ void init_ult3580_td9(struct lu_phy_attr *lu) {
+ 	add_drive_media_list(lu, LOAD_RW, "LTO9 WORM");
+ 	add_drive_media_list(lu, LOAD_RW, "LTO9 ENCR");
+ }
++
++void init_ult3580_tda(struct lu_phy_attr *lu) {
++	ssc_pm.name								 = pm_name_lto10;
++	ssc_pm.lu								 = lu;
++	ssc_pm.native_drive_density				 = &density_lto10;
++	ssc_pm.update_encryption_mode			 = update_ult_encryption_mode;
++	ssc_pm.encryption_capabilities			 = encr_capabilities_ult;
++	ssc_pm.kad_validation					 = td4_kad_validation;
++	ssc_pm.clear_WORM						 = clear_ult_WORM;
++	ssc_pm.set_WORM							 = set_ult_WORM;
++	ssc_pm.drive_supports_append_only_mode	 = TRUE;
++	ssc_pm.drive_supports_early_warning		 = TRUE;
++	ssc_pm.drive_supports_prog_early_warning = TRUE;
++	ssc_pm.drive_supports_WORM				 = TRUE;
++	ssc_pm.drive_supports_SPR				 = TRUE;
++	ssc_pm.drive_supports_SP				 = TRUE;
++	ssc_pm.drive_supports_LBP				 = LBP_CRC32C; /* both RS-CRC and CRC32C */
++	ssc_pm.drive_ANSI_VERSION				 = 5;
++
++	ssc_personality_module_register(&ssc_pm);
++
++	init_ult_inquiry(lu);
++
++	add_mode_page_rw_err_recovery(lu);
++	add_mode_disconnect_reconnect(lu);
++	add_mode_control(lu);
++	add_mode_control_extension(lu);
++	add_mode_control_data_protection(lu); /* LBP 0x0a/0xf0 */
++	add_mode_data_compression(lu);
++	add_mode_device_configuration(lu);
++	add_mode_device_configuration_extension(lu);
++	add_mode_medium_partition(lu);
++	add_mode_power_condition(lu);
++	add_mode_information_exception(lu);
++	add_mode_medium_configuration(lu);
++	add_mode_ult_encr_mode_pages(lu); /* Extra for LTO-7+ */
++	add_mode_vendor_25h_mode_pages(lu);
++	add_mode_behavior_configuration(lu);
++	add_mode_encryption_mode_attribute(lu);
++
++	/* Supports non-zero programable early warning */
++	update_prog_early_warning(lu);
++
++	add_log_write_err_counter(lu);
++	add_log_read_err_counter(lu);
++	add_log_sequential_access(lu);
++	add_log_temperature_page(lu);
++	add_log_selftest_results(lu);
++	add_log_device_status(lu);
++	add_log_volume_statistics(lu);
++	add_log_tape_alert(lu);
++	add_log_tape_usage(lu);
++	add_log_tape_capacity(lu);
++	add_log_data_compression(lu);
++	add_log_performance_characteristics(lu);
++
++	/* Capacity units in MBytes */
++	((struct priv_lu_ssc *)lu->lu_private)->capacity_unit = 1L << 20;
++
++	/* LTO-10 drops backwards compatibility entirely: an Ultrium 10 drive
++	 * handles only the 30TB and 40TB Premium Ultrium 10 cartridges.
++	 * IBM LTO SCSI Reference GA32-0928-08, "Ultrium 10 Tape Drive".
++	 */
++	add_density_support(&lu->den_list, &density_lto10, 1);
++	add_density_support(&lu->den_list, &density_lto10p, 1);
++
++	add_drive_media_list(lu, LOAD_RW, "LTO10");
++	add_drive_media_list(lu, LOAD_RO, "LTO10 Clean");
++	add_drive_media_list(lu, LOAD_RW, "LTO10 WORM");
++	add_drive_media_list(lu, LOAD_RW, "LTO10 ENCR");
++	add_drive_media_list(lu, LOAD_RW, "LTO10P");
++}
+diff --git a/usr/vtllib.c b/usr/vtllib.c
+index 796de8f..f362ef3 100644
+--- a/usr/vtllib.c
++++ b/usr/vtllib.c
+@@ -1700,6 +1700,162 @@ finished:
+ 	fclose(conf);
+ }
+ 
++/*
++ * Native (uncompressed) capacity of a media type, in bytes.
++ *
++ * Used when media is created without an explicit capacity, so that a cartridge
++ * claiming to be a given generation reports the size that generation actually
++ * holds. Cartridge data files are sparse, so a large capacity here costs
++ * nothing until it is written to.
++ */
++/*
++ * How many partitions a cartridge of this media type can hold.
++ *
++ * LTO-5 and LTO-6 hold two partitions, LTO-7 raised that to four and every
++ * later generation kept it. Everything else is described as a single partition.
++ */
++uint8_t media_max_partitions(uint8_t media_type) {
++	switch (media_type) {
++	case Media_LTO5:
++	case Media_LTO6:
++		return 2;
++	case Media_LTO7:
++	case Media_LTO8:
++	case Media_LTO9:
++	case Media_LTO10:
++	case Media_LTO10P:
++		return 4;
++	default:
++		return 1;
++	}
++}
++
++uint64_t media_native_capacity(uint8_t media_type) {
++	const uint64_t GB = 1000000000ULL; /* Capacities are quoted in SI units */
++
++	switch (media_type) {
++	case Media_LTO1:
++		return 100 * GB;
++	case Media_LTO2:
++		return 200 * GB;
++	case Media_LTO3:
++		return 400 * GB;
++	case Media_LTO4:
++		return 800 * GB;
++	case Media_LTO5:
++		return 1500 * GB;
++	case Media_LTO6:
++		return 2500 * GB;
++	case Media_LTO7:
++		return 6000 * GB;
++	case Media_LTO8:
++		return 12000 * GB;
++	case Media_LTO9:
++		return 18000 * GB;
++	case Media_LTO10:
++		return 30000 * GB;
++	case Media_LTO10P: /* Ultrium 10 Premium cartridge */
++		return 40000 * GB;
++	/* set_media_params() uses these media types to stand for the 3592 format
++	 * generations rather than for the WORM cartridges their names suggest:
++	 * J1A -> JA, E05 -> JB, E06 -> JX, E07 -> JK. Each gets the headline
++	 * native capacity of that generation.
++	 */
++	case Media_3592_JA:
++		return 300 * GB;
++	case Media_3592_JB:
++		return 700 * GB;
++	case Media_3592_JX:
++		return 1000 * GB;
++	case Media_3592_JK:
++		return 4000 * GB;
++	case Media_T10KA:
++		return 500 * GB;
++	case Media_T10KB:
++		return 1000 * GB;
++	case Media_T10KC:
++		return 5000 * GB;
++	case Media_AIT1:
++		return 35 * GB;
++	case Media_AIT2:
++		return 50 * GB;
++	case Media_AIT3:
++		return 100 * GB;
++	case Media_AIT4:
++		return 200 * GB;
++	case Media_DLT3:
++		return 10 * GB;
++	case Media_DLT4:
++		return 20 * GB;
++	case Media_SDLT:
++		return 100 * GB;
++	case Media_SDLT220:
++		return 110 * GB;
++	case Media_SDLT320:
++		return 160 * GB;
++	case Media_SDLT600:
++		return 300 * GB;
++	case Media_DDS1:
++		return 2 * GB;
++	case Media_DDS2:
++		return 4 * GB;
++	case Media_DDS3:
++		return 12 * GB;
++	case Media_DDS4:
++		return 20 * GB;
++	default:
++		/* Cleaning cartridges and anything unrecognised. Small, but not zero,
++		 * since zero means "use the native capacity" to the caller.
++		 */
++		return GB;
++	}
++}
++
++/*
++ * Size of the medium auxiliary memory in a cartridge of this media type, in
++ * bytes. LTO cartridge memory grew from 4KB to 8KB with LTO-5 and to 16KB with
++ * LTO-9; other formats are given the same 8KB as a reasonable default.
++ */
++uint64_t media_mam_capacity(uint8_t media_type) {
++	switch (media_type) {
++	case Media_LTO1:
++	case Media_LTO2:
++	case Media_LTO3:
++	case Media_LTO4:
++		return 4096;
++	case Media_LTO9:
++	case Media_LTO10:
++	case Media_LTO10P:
++		return 16384;
++	default:
++		return 8192;
++	}
++}
++
++/*
++ * Recalculate the MAM space remaining attribute: the cartridge memory less what
++ * the attributes held in it occupy, each costing its value plus the five byte
++ * identifier, format and length header.
++ */
++void mam_space_remaining(struct MAM *mamp) {
++	uint64_t capacity = get_unaligned_be64(&mamp->MAMCapacity);
++	uint64_t used	  = 0;
++	int		 i;
++
++	if (!capacity) {
++		/* Media created before the cartridge memory size was recorded */
++		capacity = media_mam_capacity(mamp->MediaType);
++		put_unaligned_be64(capacity, &mamp->MAMCapacity);
++	}
++
++	for (i = 0; i < MAM_ATTRIBUTE_END; i++)
++		if (mamp->attributes[i].length)
++			used += mamp->attributes[i].length + 5;
++
++	put_unaligned_be64((used < capacity) ? capacity - used : 0,
++					   &mamp->MAMSpaceRemaining);
++}
++
+ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 	/* Invent some defaults */
+ 	mamp->MediaType = Media_undefined;
+@@ -1711,7 +1867,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 	mamp->max_partitions = 1;
+ 	mamp->num_partitions = 1;
+ 
+-	if (!(strncmp(density, "LTO1", 4))) {
++	if (!(strcmp(density, "LTO1"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto1;
+ 		mamp->MediaType			= Media_LTO1;
+ 		put_unaligned_be32(384, &mamp->MediumLength);
+@@ -1720,7 +1876,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		memcpy(&mamp->media_info.density_name, "U-18  ", 6);
+ 		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
+ 		put_unaligned_be32(4880, &mamp->media_info.bits_per_mm);
+-	} else if (!(strncmp(density, "LTO2", 4))) {
++	} else if (!(strcmp(density, "LTO2"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto2;
+ 		mamp->MediaType			= Media_LTO2;
+ 		put_unaligned_be32(512, &mamp->MediumLength);
+@@ -1729,7 +1885,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		memcpy(&mamp->media_info.density_name, "U-28  ", 6);
+ 		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
+ 		put_unaligned_be32(7398, &mamp->media_info.bits_per_mm);
+-	} else if (!(strncmp(density, "LTO3", 4))) {
++	} else if (!(strcmp(density, "LTO3"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto3;
+ 		mamp->MediaType			= Media_LTO3;
+ 		put_unaligned_be32(704, &mamp->MediumLength);
+@@ -1738,7 +1894,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		memcpy(&mamp->media_info.density_name, "U-316 ", 6);
+ 		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
+ 		put_unaligned_be32(9638, &mamp->media_info.bits_per_mm);
+-	} else if (!(strncmp(density, "LTO4", 4))) {
++	} else if (!(strcmp(density, "LTO4"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto4;
+ 		mamp->MediaType			= Media_LTO4;
+ 		put_unaligned_be32(896, &mamp->MediumLength);
+@@ -1747,7 +1903,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		memcpy(&mamp->media_info.density_name, "U-416  ", 6);
+ 		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
+ 		put_unaligned_be32(12725, &mamp->media_info.bits_per_mm);
+-	} else if (!(strncmp(density, "LTO5", 4))) {
++	} else if (!(strcmp(density, "LTO5"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto5;
+ 		mamp->MediaType			= Media_LTO5;
+ 		put_unaligned_be32(1280, &mamp->MediumLength);
+@@ -1758,7 +1914,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		put_unaligned_be32(15142, &mamp->media_info.bits_per_mm);
+ 		mamp->max_partitions = 2;
+ 		mamp->num_partitions = 2;
+-	} else if (!(strncmp(density, "LTO6", 4))) {
++	} else if (!(strcmp(density, "LTO6"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto6;
+ 		mamp->MediaType			= Media_LTO6;
+ 		put_unaligned_be32(2176, &mamp->MediumLength);
+@@ -1769,7 +1925,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		put_unaligned_be32(18441, &mamp->media_info.bits_per_mm);
+ 		mamp->max_partitions = 2;
+ 		mamp->num_partitions = 2;
+-	} else if (!(strncmp(density, "LTO7", 4))) {
++	} else if (!(strcmp(density, "LTO7"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto7;
+ 		mamp->MediaType			= Media_LTO7;
+ 		put_unaligned_be32(960, &mamp->MediumLength);
+@@ -1780,7 +1936,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		put_unaligned_be32(19107, &mamp->media_info.bits_per_mm);
+ 		mamp->max_partitions = 2;
+ 		mamp->num_partitions = 2;
+-	} else if (!(strncmp(density, "LTO8", 4))) {
++	} else if (!(strcmp(density, "LTO8"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto8;
+ 		mamp->MediaType			= Media_LTO8;
+ 		put_unaligned_be32(960, &mamp->MediumLength);
+@@ -1791,7 +1947,7 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		put_unaligned_be32(19107, &mamp->media_info.bits_per_mm);
+ 		mamp->max_partitions = 2;
+ 		mamp->num_partitions = 2;
+-	} else if (!(strncmp(density, "LTO9", 4))) {
++	} else if (!(strcmp(density, "LTO9"))) {
+ 		mamp->MediumDensityCode = medium_density_code_lto9;
+ 		mamp->MediaType			= Media_LTO9;
+ 		put_unaligned_be32(960, &mamp->MediumLength);
+@@ -1802,6 +1958,31 @@ unsigned int set_media_params(struct MAM *mamp, char *density) {
+ 		put_unaligned_be32(19107, &mamp->media_info.bits_per_mm);
+ 		mamp->max_partitions = 2;
+ 		mamp->num_partitions = 2;
++	/* Density names and bit densities are from the IBM LTO SCSI Reference,
++	 * GA32-0928-08 table 114. That table gives no description string and the
++	 * LTO-10 tape length is not published, so the description follows the
++	 * LTO-9 pattern and the length is carried forward as LTO-8 and LTO-9 do.
++	 */
++	} else if (!(strcmp(density, "LTO10"))) {
++		mamp->MediumDensityCode = medium_density_code_lto10;
++		mamp->MediaType			= Media_LTO10;
++		put_unaligned_be32(960, &mamp->MediumLength);
++		put_unaligned_be32(127, &mamp->MediumWidth);
++		memcpy(&mamp->media_info.description, "Ultrium 10/32T", 14);
++		memcpy(&mamp->media_info.density_name, "U1032A ", 6);
++		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
++		put_unaligned_be32(21657, &mamp->media_info.bits_per_mm);
++		mamp->num_partitions = 2;
++	} else if (!(strcmp(density, "LTO10P"))) {
++		mamp->MediumDensityCode = medium_density_code_lto10p;
++		mamp->MediaType			= Media_LTO10P;
++		put_unaligned_be32(960, &mamp->MediumLength);
++		put_unaligned_be32(127, &mamp->MediumWidth);
++		memcpy(&mamp->media_info.description, "Ultrium 10/32T P", 16);
++		memcpy(&mamp->media_info.density_name, "U1032P ", 6);
++		memcpy(&mamp->AssigningOrganization_1, "LTO-CVE", 7);
++		put_unaligned_be32(22441, &mamp->media_info.bits_per_mm);
++		mamp->num_partitions = 2;
+ 	} else if (!(strncmp(density, "AIT1", 4))) {
+ 		/* Vaules for AIT taken from "Product Manual SDX-900V v1.0" */
+ 		mamp->MediumDensityCode = medium_density_code_ait1;
+-- 
+2.43.0
+

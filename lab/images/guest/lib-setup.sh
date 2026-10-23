@@ -39,7 +39,7 @@ if [ -n "$LIBID" ]; then
     echo "$LIBID" > /etc/mhvtl/.fcsim-id
   fi
 fi
-if [ ! -d /opt/mhvtl/${BARCODE}001L8 ]; then
+if [ ! -d /opt/mhvtl/${BARCODE}001LA ]; then
   make_vtl_media --config-dir=/etc/mhvtl --home-dir=/opt/mhvtl --force >/var/log/fcsim-media.log 2>&1
   chown -R vtl:vtl /opt/mhvtl 2>/dev/null || true
 fi
