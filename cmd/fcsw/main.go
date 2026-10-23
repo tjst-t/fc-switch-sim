@@ -94,6 +94,9 @@ func run(cfgPath, listen string, wait time.Duration, log *slog.Logger) error {
 		t := time.NewTicker(time.Second)
 		defer t.Stop()
 		for range t.C {
+			for i, p := range ports {
+				sw.SetLink(i, p.LinkUp())
+			}
 			sw.Tick()
 		}
 	}()

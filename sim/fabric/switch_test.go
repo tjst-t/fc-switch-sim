@@ -366,3 +366,27 @@ func TestReenabledPortResetsStaleENode(t *testing.T) {
 		t.Fatalf("VN_Port の記述子が無い")
 	}
 }
+
+func TestLinkDownClearsLogins(t *testing.T) {
+	sw, trs := newTestSwitch(t, 2, Zoning{})
+	host := newENode(t, sw, trs, 0, hostWWPN)
+	tape := newENode(t, sw, trs, 1, tapeWWPN)
+	host.login(false)
+	tape.login(true)
+	host.takeRSCN()
+	trs[1].take()
+	sw.SetLink(1, false)
+	if len(trs[1].take()) != 0 {
+		t.Fatalf("リンクが落ちたポートに送った")
+	}
+	if host.takeRSCN() != 1 {
+		t.Fatalf("host に RSCN が届かない")
+	}
+	if st := sw.Ports()[1].State; st != "Offline" || len(sw.NameServer()) != 1 {
+		t.Fatalf("ポートの状態 %s、ログイン %d", st, len(sw.NameServer()))
+	}
+	sw.SetLink(1, true)
+	if st := sw.Ports()[1].State; st != "NoLogin" || len(trs[1].take()) != 1 {
+		t.Fatalf("戻したあとの状態 %s、または広告が出ない", st)
+	}
+}

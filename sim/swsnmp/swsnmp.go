@@ -3,7 +3,7 @@
 // 根は .1.3.6.1.4.1.99999.2（99999 は仮の企業番号。IANA には登録していない）。
 //
 //	.2.1.x.0     スイッチ：1 name・2 switchWWN・3 domainID・4 portCount・5 loginCount・6 zoneCount・7 zoningChanges（Counter32）
-//	.2.2.1.c.i   ポートの表（i はポート番号＋1）：1 portNumber（0 から）・2 interface・3 portWWN・4 state（1 online・2 noLogin・3 disabled）・
+//	.2.2.1.c.i   ポートの表（i はポート番号＋1）：1 portNumber（0 から）・2 interface・3 portWWN・4 state（1 online・2 noLogin・3 disabled・4 offline＝リンクが落ちた）・
 //	             5 loginCount・6 fcids（"01.00.00,01.00.01"）・7 zoneDrops・8 rxFCoE・9 txFCoE（7〜9 は Counter32）
 //	.2.3.1.c.i   ログインの表（i は FC_ID を 24 ビットの数にしたもの）：1 fcid・2 wwpn・3 portNumber・4 npiv（1 yes・2 no）
 //	.2.0.n       通知：1 portStateChange・2 login・3 logout・4 zoningChange
@@ -33,6 +33,8 @@ func StateNum(s string) int {
 		return 1
 	case "NoLogin":
 		return 2
+	case "Offline":
+		return 4
 	}
 	return 3
 }

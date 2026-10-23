@@ -27,6 +27,8 @@ if ls /sys/class/fc_host/ 2>/dev/null | grep -q host; then
   for NIC in "${NICS[@]}"; do fcoeadm -d "$NIC" 2>/dev/null || true; done
   sleep 2
 fi
+# 起動時に保存済みの LIO の設定を戻させない（mhVTL の装置ができる前に戻そうとして失敗し、順番も崩れる）
+systemctl disable rtslib-fb-targetctl >/dev/null 2>&1 || true
 # 1. mhVTL
 BARCODE=E01
 if [ -n "$LIBID" ]; then

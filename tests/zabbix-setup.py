@@ -228,7 +228,7 @@ def switch_trap_template():
         item_prototypes=[dict(name="Trap: port {#PORTNUM} ({#IF}) state change", key_=k_port, type=17, value_type=2)],
         trigger_prototypes=[dict(
             description="FC switch {HOST.NAME} port {#PORTNUM} ({#IF}) went down (SNMP trap)", priority=3,
-            expression=f"find(/{TT}/{k_port},,\"regexp\",{zq(state_is + '[23]')})=1",
+            expression=f"find(/{TT}/{k_port},,\"regexp\",{zq(state_is + '[234]')})=1",
             recovery_mode=1,
             recovery_expression=f"find(/{TT}/{k_port},,\"regexp\",{zq(state_is + '1')})=1")],
     )
@@ -355,7 +355,7 @@ def build(z):
     trap_tid = tid
     # スイッチの SNMP
     tid = ensure_template(z, TS, tgid)
-    ensure_valuemap(z, tid, "FCSIM port state", {"1": "online", "2": "noLogin", "3": "disabled"})
+    ensure_valuemap(z, tid, "FCSIM port state", {"1": "online", "2": "noLogin", "3": "disabled", "4": "offline"})
     svm = {v["name"]: v["valuemapid"] for v in z.call("valuemap.get", {"hostids": tid, "output": ["valuemapid", "name"]})}
     items, triggers, rule = switch_snmp_template()
     for it in items:

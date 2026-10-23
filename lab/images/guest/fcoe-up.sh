@@ -30,7 +30,8 @@ AUTO_VLAN="no"
 MODE="fabric"
 CFG
 done
-systemctl enable --now fcoe-utils >/dev/null 2>&1
+# fcoe-utils は起動時に自分では起こさない（fcsim-setup.service がこのスクリプトで、順番どおりに起こす）
+systemctl disable fcoe-utils >/dev/null 2>&1 || true
 systemctl restart fcoe-utils
 # NIC ごとの fc_host（WWPN = 0x2000 + MAC）が Online になるまで待つ
 for NIC in "${NICS[@]}"; do

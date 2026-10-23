@@ -69,9 +69,24 @@ write_files:
     encoding: b64
     content: $(b64 "$ROOT/lab/images/guest/lib-setup.sh")
 $lmfiles
+  # FC の設定は起動のたびに流す（MTU・スキャッタギャザー・LIO のターゲット・FCoE は再起動で消えるか、順番が要るため）
+  - path: /etc/systemd/system/fcsim-setup.service
+    content: |
+      [Unit]
+      Description=fc-switch-sim FC setup (FCoE, LIO target, mhVTL)
+      Wants=network-online.target
+      After=network-online.target systemd-modules-load.service
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      TimeoutStartSec=600
+      ExecStartPre=/bin/rm -f /var/log/fcsim-setup.rc
+      ExecStart=/bin/sh -c '$cmd > /var/log/fcsim-setup.log 2>&1; echo \$\$? > /var/log/fcsim-setup.rc'
+      [Install]
+      WantedBy=multi-user.target
 runcmd:
   - [sh, -c, '$DEBUGCMD']
-  - [sh, -c, '$cmd > /var/log/fcsim-setup.log 2>&1; echo \$? > /var/log/fcsim-setup.rc']
+  - [sh, -c, 'systemctl daemon-reload; systemctl enable fcsim-setup; systemctl start fcsim-setup']
   - [sh, -c, '$lmcmd']
 UD
   printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$name" "$(date +%s)" "$name" > "$d/meta-data"

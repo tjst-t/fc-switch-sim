@@ -53,8 +53,8 @@ fswPortInterface OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS cu
     DESCRIPTION "Ethernet interface of the port." ::= { fswPortEntry 2 }
 fswPortWWN OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current
     DESCRIPTION "Port WWN." ::= { fswPortEntry 3 }
-fswPortState OBJECT-TYPE SYNTAX INTEGER { online(1), noLogin(2), disabled(3) } MAX-ACCESS read-only STATUS current
-    DESCRIPTION "online: at least one N_Port logged in." ::= { fswPortEntry 4 }
+fswPortState OBJECT-TYPE SYNTAX INTEGER { online(1), noLogin(2), disabled(3), offline(4) } MAX-ACCESS read-only STATUS current
+    DESCRIPTION "online: at least one N_Port logged in. offline: no link (cable pulled)." ::= { fswPortEntry 4 }
 fswPortLoginCount OBJECT-TYPE SYNTAX Integer32 MAX-ACCESS read-only STATUS current
     DESCRIPTION "Logged-in N_Ports on the port (FLOGI + FDISC)." ::= { fswPortEntry 5 }
 fswPortFCIDs OBJECT-TYPE SYNTAX DisplayString MAX-ACCESS read-only STATUS current

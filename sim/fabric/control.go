@@ -87,6 +87,8 @@ func (s *Switch) Ports() []PortInfo {
 		switch {
 		case !p.Enabled:
 			pi.State = "Disabled"
+		case !p.LinkUp:
+			pi.State = "Offline"
 		case len(pi.FCIDs) > 0:
 			pi.State = "Online"
 		default:
@@ -146,6 +148,34 @@ func (s *Switch) SetZoning(z Zoning) error {
 	s.eventWith(Event{Kind: "zoning", Port: -1, Zones: len(z.Zones)}, "ゾーニングを変えた（ゾーン %d 個、ゾーンが無いときは %s）", len(z.Zones), s.zoning.DefaultZone)
 	s.rscnAll()
 	return nil
+}
+
+// SetLink はポートのリンク（ケーブル）の状態を伝える。落ちたら、そのポートのログインを全部消す
+// （相手に Clear Virtual Link は届かないので送らない。ログアウトは RSCN で知らせる）。戻ったら広告を出す。
+func (s *Switch) SetLink(idx int, up bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if idx < 0 || idx >= len(s.ports) {
+		return
+	}
+	p := s.ports[idx]
+	if p.LinkUp == up {
+		return
+	}
+	p.LinkUp = up
+	if !up {
+		if len(s.loginsOnPort(p.Index)) > 0 {
+			p.needReset = true
+		}
+		s.clearPort(p, false, "リンクが落ちた")
+		p.ENodeMAC = nil
+		s.event("link-down", idx, "ポート %d（%s）のリンクが落ちた", idx, p.Name)
+		return
+	}
+	s.event("link-up", idx, "ポート %d（%s）のリンクがつながった", idx, p.Name)
+	if p.Enabled {
+		s.sendAdv(p, nil, false)
+	}
 }
 
 // SetPortEnabled はポートを有効・無効にする。無効にするとログインを Clear Virtual Link で切る。

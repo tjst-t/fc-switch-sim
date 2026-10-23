@@ -26,6 +26,7 @@ type Port struct {
 	Name    string
 	tr      Transport
 	Enabled bool
+	LinkUp  bool // リンク（ケーブル）がつながっている
 
 	// ポートの先の ENode（FIP の発見で分かる）。
 	ENodeMAC     net.HardwareAddr
@@ -137,7 +138,7 @@ func New(cfg Config, transports []Transport, log *slog.Logger) (*Switch, error) 
 		now:    time.Now,
 	}
 	for i, pc := range cfg.Ports {
-		s.ports = append(s.ports, &Port{Index: i, Name: pc.Interface, tr: transports[i], Enabled: !pc.Disabled})
+		s.ports = append(s.ports, &Port{Index: i, Name: pc.Interface, tr: transports[i], Enabled: !pc.Disabled, LinkUp: true})
 	}
 	return s, nil
 }
@@ -231,7 +232,7 @@ func (s *Switch) Tick() {
 	now := s.now()
 	period := s.cfg.fkaPeriod()
 	for _, p := range s.ports {
-		if !p.Enabled {
+		if !p.Enabled || !p.LinkUp {
 			continue
 		}
 		if now.Sub(p.lastAdv) >= period {

@@ -1,6 +1,6 @@
 [Unit]
 Description=Tape library management API (fc-switch-sim libmgr)
-After=mhvtl.target network-online.target
+After=mhvtl.target network-online.target fcsim-setup.service
 
 [Service]
 EnvironmentFile=-/etc/default/libmgr

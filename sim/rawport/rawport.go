@@ -6,6 +6,8 @@ package rawport
 import (
 	"fmt"
 	"net"
+	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -105,7 +107,12 @@ func (p *Port) Run(fn func([]byte)) error {
 	for {
 		n, from, err := unix.Recvfrom(p.fd, buf, 0)
 		if err != nil {
-			if err == unix.EINTR {
+			switch err {
+			case unix.EINTR:
+				continue
+			case unix.ENETDOWN, unix.ENXIO, unix.EAGAIN:
+				// リンクが落ちている（ケーブルを抜いた）：戻るまで待つ。リンクの状態は LinkUp で見る
+				time.Sleep(200 * time.Millisecond)
 				continue
 			}
 			return err
@@ -118,3 +125,17 @@ func (p *Port) Run(fn func([]byte)) error {
 }
 
 func (p *Port) Close() error { return unix.Close(p.fd) }
+
+// LinkUp はリンクがつながっているか（/sys/class/net/<if>/operstate が up か unknown）。
+// carrier は管理上 down のインタフェースでは読めないので使わない。読めなければ true とみなす。
+func (p *Port) LinkUp() bool {
+	b, err := os.ReadFile("/sys/class/net/" + p.ifi.Name + "/operstate")
+	if err != nil {
+		return true
+	}
+	switch strings.TrimSpace(string(b)) {
+	case "up", "unknown":
+		return true
+	}
+	return false
+}
