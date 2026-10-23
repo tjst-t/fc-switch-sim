@@ -208,6 +208,26 @@ snmp:
 そのときサーバと Zabbix に何が見えるかは `docs/failure-drills.md`。台本は `tools/drill.sh`（`list`・`inject`・`recover`・`run <名前>|all`）。
 2026-10-23 に `tools/drill.sh run all` が全部 OK。
 
+## テープのロード・巻き戻し・位置決め（シーク）の時間
+
+mhVTL には、ドライブごとにロード・取り出し・巻き戻し・位置決め（locate・space）の遅延を入れる仕組みが元から入っている
+（`vtlcmd <ドライブの ID> delay load|unload|rewind|position <秒>`）。ただし daemon（vtltape）の再起動で毎回消えるので、
+冗長構成のライブラリ VM 起動時に `lib-setup.sh` が設定し直す（環境変数 `FCSIM_TAPE_DELAYS` が空でないときだけ。既定は無効）。
+
+```
+FCSIM_TAPE_DELAYS=1 lab/clab/prepare.sh ha
+sudo containerlab deploy -t lab/clab/run-ha.clab.yml
+```
+
+- ドライブ 11・12（LTO-10）：ロード 12 秒・取り出し 10 秒・位置決め 8 秒・巻き戻し 20 秒。13・14（LTO-6）：ロード 10 秒・取り出し 8 秒・位置決め 6 秒・巻き戻し 15 秒
+  （mhVTL の上限は load・unload・position が 20、rewind が 30。`man vtlcmd(1)`）。
+- 効くのは実際にドライブへ読み書き・`mt rewind`・`mt fsf` 等をしたとき（ロード中・巻き戻し中はドライブが Not Ready になり、
+  `mt status` のような問い合わせだけのコマンドはカーネル側のキャッシュを返すため変化が見えない）。
+  2026-10-23、実機で `vtlcmd` で設定した秒数どおりにブロックされることを確認した（rewind 8 秒指定→実測 8.03 秒、
+  position 6 秒→実測 6.10 秒、load 15 秒→読み出しが 15.57 秒ブロック）。
+- 既定は無効：有効にすると読み書きのたびに数秒〜数十秒ブロックされ、既存の e2e テスト（`tests/e2e-ha.sh` 等）の
+  タイムアウトや繰り返し回数の前提と噛み合わないため、デモ・手元での確認用に留める。
+
 ## 動かし方（直結の試験の場）
 
 ```

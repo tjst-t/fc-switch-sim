@@ -51,6 +51,20 @@ for i in $(seq 1 60); do
   if [ "$n" -gt 0 ] && [ "$n" = "$prev" ]; then same=$((same+1)); [ $same -ge 3 ] && break; else same=0; fi
   prev=$n; sleep 1
 done
+# 1.5 (任意) ロード・巻き戻し・位置決め(シーク)の時間を再現する(環境変数 FCSIM_TAPE_DELAYS が空でないとき)。
+# mhVTL にはこの遅延の仕組みが元から入っているが、daemon(vtltape)の再起動で毎回消えるので起動のたびに設定し直す。
+# ドライブの ID はライブラリ番号によらずいつも 11-14(11・12 が LTO-10、13・14 が LTO-6。generate_device_conf の仕様)。
+# 単位は秒。mhVTL の上限は load・unload・position が 20、rewind が 30(man vtlcmd(1))。
+if [ -n "${FCSIM_TAPE_DELAYS:-}" ]; then
+  for id in 11 12; do # LTO-10
+    vtlcmd $id delay load 12; vtlcmd $id delay unload 10
+    vtlcmd $id delay position 8; vtlcmd $id delay rewind 20
+  done
+  for id in 13 14; do # LTO-6
+    vtlcmd $id delay load 10; vtlcmd $id delay unload 8
+    vtlcmd $id delay position 6; vtlcmd $id delay rewind 15
+  done
+fi
 # 2. ライブラリ（STK L700）と、それに属するドライブ（シリアル番号の頭がライブラリと同じ）を /dev/sg で探す
 LIBSG=$(lsscsi -g | awk '/mediumx/ && /L700/ {print $NF; exit}')
 serial() { sg_vpd -p sn "$1" 2>/dev/null | awk -F: '/serial number:/ {gsub(/ /,"",$2); print $2}' | tail -1; }

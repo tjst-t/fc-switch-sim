@@ -26,6 +26,8 @@ esac
 sed "s|__CACHE__|$CACHE|g" $SRC > $OUT
 PUB=$(cat "$CACHE/id_lab.pub")
 b64() { base64 -w0 "$1"; }
+# FCSIM_TAPE_DELAYS=1 なら、ライブラリ VM の mhVTL にロード・巻き戻し・位置決めの時間を設定する（既定は無効。有効にすると
+# 読み書き・mt rewind・mt fsf 等が数秒〜数十秒ブロックされ、既存の e2e テストのタイムアウトと噛み合わない）。
 # FCSIM_DEBUG=1 なら、VM の中で libfc・libfcoe のデバッグのログを起動時から出す（調査用）
 if [ "${FCSIM_DEBUG:-}" = 1 ]; then
   DEBUGCMD='modprobe libfcoe; echo 0x3f > /sys/module/libfc/parameters/debug_logging; echo 0xff > /sys/module/libfcoe/parameters/debug_logging'
@@ -80,6 +82,7 @@ $lmfiles
       Type=oneshot
       RemainAfterExit=yes
       TimeoutStartSec=600
+      Environment=FCSIM_TAPE_DELAYS=${FCSIM_TAPE_DELAYS:-}
       ExecStartPre=/bin/rm -f /var/log/fcsim-setup.rc
       ExecStart=/bin/sh -c '$cmd > /var/log/fcsim-setup.log 2>&1; echo \$\$? > /var/log/fcsim-setup.rc'
       [Install]
