@@ -202,6 +202,12 @@ snmp:
   「zoning changed (SNMP trap)」はお知らせで 10 分）。fab-a・fab-b のホストは SNMP のインタフェースにした。
 - 試験（`tests/e2e-zabbix.sh` の 9）：2026-10-22 に Zabbix を作り直してから 2 回、全部 OK。FC の冗長・1 系統・管理 API の試験も、この版で全部 OK。
 
+## 障害訓練
+
+冗長構成で起こせる 10 の障害（スイッチの停止・ケーブル断・ポートの無効・ゾーンの誤り・ライブラリのオフライン・TapeAlert・ライブラリの電源断・サーバの再起動）と、
+そのときサーバと Zabbix に何が見えるかは `docs/failure-drills.md`。台本は `tools/drill.sh`（`list`・`inject`・`recover`・`run <名前>|all`）。
+2026-10-23 に `tools/drill.sh run all` が全部 OK。
+
 ## 動かし方（直結の試験の場）
 
 ```
