@@ -10,6 +10,13 @@ users:
     plain_text_passwd: lab
     ssh_authorized_keys:
       - __SSH_PUBKEY__
+write_files:
+  - path: /usr/local/src/patches/0001-mhvtl-lto10-support.patch
+    encoding: b64
+    content: __PATCH1_B64__
+  - path: /usr/local/src/patches/0002-drives-1-2-use-lto10.patch
+    encoding: b64
+    content: __PATCH2_B64__
 package_update: true
 packages:
   - fcoe-utils
@@ -33,13 +40,13 @@ runcmd:
   - [sh, -c, 'apt-get install -y linux-headers-$(uname -r) > /var/log/fcsim-headers.log 2>&1 || true']
   # mhVTL：リリース版に固定（master は 2026-10-21 にリンクに失敗した）。
   # SG の数を 1024 に（既定の 128 では LIO pscsi が 1MB 以上のブロックを組めない）。
-  # LTO-10 は 1.8-0_release に無いので、master のコミット 1cd21f7 を cherry-pick したパッチを当てる。
+  # LTO-10 は 1.8-0_release に無いので、master のコミット 1cd21f7 を cherry-pick したパッチを当てる
+  # （tjst-t/fc-switch-sim は非公開リポジトリで VM から clone できないため、パッチ本体を write_files で埋め込む）。
   # ドライブ 1・2（library 10）は LTO-10、3・4 は LTO-6 のまま（世代不一致の確認用に残す）。
   # make install は restorecon（SELinux）を呼ぶので、何もしないものを置く。
   - [sh, -c, 'printf "#!/bin/sh\nexit 0\n" > /usr/local/sbin/restorecon && chmod +x /usr/local/sbin/restorecon']
-  - [sh, -c, 'cd /usr/local/src && git clone -q --depth 1 https://github.com/tjst-t/fc-switch-sim.git > /var/log/fcsim-patches.log 2>&1']
   - [sh, -c, 'cd /usr/local/src && git clone -q --depth 1 --branch 1.8-0_release https://github.com/markh794/mhvtl.git > /var/log/fcsim-mhvtl.log 2>&1']
-  - [sh, -c, 'cd /usr/local/src/mhvtl && git apply /usr/local/src/fc-switch-sim/lab/images/base/patches/0001-mhvtl-lto10-support.patch /usr/local/src/fc-switch-sim/lab/images/base/patches/0002-drives-1-2-use-lto10.patch >> /var/log/fcsim-mhvtl.log 2>&1']
+  - [sh, -c, 'cd /usr/local/src/mhvtl && git apply /usr/local/src/patches/0001-mhvtl-lto10-support.patch /usr/local/src/patches/0002-drives-1-2-use-lto10.patch >> /var/log/fcsim-mhvtl.log 2>&1']
   - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && sed -i "s/^#define SCSI_MAX_SG_CHAIN_SEGMENTS SG_ALL/#define SCSI_MAX_SG_CHAIN_SEGMENTS 1024/" mhvtl.c']
   - [sh, -c, 'cd /usr/local/src/mhvtl && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
   - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
