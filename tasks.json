@@ -77,7 +77,7 @@
       "number": 4,
       "kind": "task",
       "title": "(b) libmgr に試験用の口 /_sim/v1（障害・扉・状態）を足す",
-      "status": "ready",
+      "status": "backlog",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [
         "a-mhvtl-0003-ua-28h-00h"
@@ -91,7 +91,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:53.856Z",
       "closedAt": null,
       "extra": {}
     },
