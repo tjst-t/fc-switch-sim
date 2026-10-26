@@ -1,0 +1,29 @@
+{
+  "format": "banto-backlog/1",
+  "milestones": [],
+  "items": [
+    {
+      "id": "bmc-vm-snmp",
+      "number": 1,
+      "kind": "task",
+      "title": "ラボの残りの資格情報（BMC・VM のユーザ・SNMP）を環境変数で上書きできるようにする",
+      "status": "backlog",
+      "parent": null,
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "low",
+      "labels": [
+        "security"
+      ],
+      "body": "公開前の直しで、Zabbix の DB（ZBX_DB_PASSWORD）と Zabbix の管理者（ZBX_ADMIN_USER・ZBX_ADMIN_PASSWORD）は環境変数で変えられるようにした（2026-10-26）。残りは手間が大きいので積んでおく：\n\n- BMC（qemu-bmc の IPMI_USER・IPMI_PASS）：lab/clab/*.clab.yml に直書き。prepare.sh の sed で差し込む形にする。tests/e2e.sh・tools/drill.sh の `-u admin:password` も合わせる\n- VM のユーザ lab/lab：lab/images/base/user-data の plain_text_passwd。build-base.sh で差し込む（共通イメージの作り直しが要る）。鍵だけにして lock_passwd: true も候補\n- SNMP のコミュニティ public：スイッチの設定（switch*.yaml）、snmpd.conf、zabbix-setup.py のホストの community、試験の snmpget\n\n既定値と既存の e2e の動きは変えないこと。",
+      "doneWhen": "環境変数を何も渡さないとき、tests/e2e.sh・e2e-ha.sh・e2e-libmgr.sh・e2e-zabbix.sh が作り直しから全部 OK。渡したときに BMC・VM の ssh パスワード・SNMP がその値で動く",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-26T02:19:18.796Z",
+      "updatedAt": "2026-10-26T02:19:18.796Z",
+      "closedAt": null,
+      "extra": {}
+    }
+  ]
+}
