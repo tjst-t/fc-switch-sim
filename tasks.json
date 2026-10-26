@@ -100,7 +100,7 @@
       "number": 5,
       "kind": "task",
       "title": "(c) libmgr の見回りを、ベンダービット付きの sg_raw と自前の READ ELEMENT STATUS の解析に替える（案A）",
-      "status": "ready",
+      "status": "backlog",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [
         "a-mhvtl-0003-ua-28h-00h"
@@ -114,7 +114,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:58.133Z",
       "closedAt": null,
       "extra": {}
     },
