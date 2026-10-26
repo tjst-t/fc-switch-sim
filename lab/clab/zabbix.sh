@@ -7,7 +7,8 @@
 set -euo pipefail
 NET=fctape-ha-mgmt
 C="sudo docker"
-DBENV=(-e POSTGRES_USER=zabbix -e POSTGRES_PASSWORD=zabbix -e POSTGRES_DB=zabbix)
+# DB のパスワードは ZBX_DB_PASSWORD で変えられる（既定 zabbix。ラボ専用）
+DBENV=(-e POSTGRES_USER=zabbix -e POSTGRES_PASSWORD="${ZBX_DB_PASSWORD:-zabbix}" -e POSTGRES_DB=zabbix)
 case "${1:-up}" in
   up)
     $C network inspect $NET >/dev/null || { echo "管理網 $NET が無い。先に冗長構成を deploy する" >&2; exit 1; }

@@ -19,6 +19,21 @@ FC スイッチ（FCoE の FCF）のシミュレーター。仮想マシンの L
 | 復旧 | ログインしていない VN_Port からフレームやキープアライブが届いたら、Clear Virtual Link でやり直しを求める（スイッチの再起動のあと、ポートを有効に戻したあと） |
 | API | HTTP の JSON（`sim/api/api.go` の頭に一覧） |
 
+
+## 初期の資格情報（ラボ専用）
+
+ラボの資格情報は、どれも試すための固定の値。**外に出る環境（ラボの管理網の外から届くところ）で使う前に、必ず変えること。**
+
+| もの | 既定 | 変え方 |
+|---|---|---|
+| BMC（qemu-bmc の Redfish・IPMI） | admin / password | `lab/clab/*.clab.yml` の `IPMI_USER`・`IPMI_PASS` |
+| Zabbix の Web・API | Admin / zabbix | Zabbix で変え、`tests/zabbix-setup.py` などには環境変数 `ZBX_ADMIN_USER`・`ZBX_ADMIN_PASSWORD` で渡す |
+| Zabbix の DB（PostgreSQL） | zabbix / zabbix | 環境変数 `ZBX_DB_PASSWORD`（`lab/clab/zabbix.sh up` のとき） |
+| VM のユーザ | lab / lab（sudo はパスワード無し） | `lab/images/base/user-data` |
+| SNMP のコミュニティ | public | スイッチの設定（`snmp.community`）・`lab/images/guest/libmgr/snmpd.conf` |
+
+VM への ssh の鍵（`.cache/id_lab`）は手元で作るもので、リポジトリには入れない。
+
 ## 構成
 
 ```

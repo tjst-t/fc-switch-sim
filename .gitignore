@@ -6,3 +6,4 @@
 /lab/clab/clab-*/
 /lab/clab/run-ha/
 /lab/clab/run-ha.clab.yml
+__pycache__/

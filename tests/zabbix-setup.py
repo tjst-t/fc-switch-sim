@@ -11,6 +11,7 @@
 """
 import argparse
 import json
+import os
 import sys
 import urllib.request
 
@@ -18,7 +19,10 @@ E = ".1.3.6.1.4.1.99999.1"
 
 
 class Zbx:
-    def __init__(self, url, user="Admin", password="zabbix"):
+    # ログインは ZBX_ADMIN_USER・ZBX_ADMIN_PASSWORD で変えられる（既定 Admin / zabbix。ラボ専用）
+    def __init__(self, url, user=None, password=None):
+        user = user or os.environ.get("ZBX_ADMIN_USER", "Admin")
+        password = password or os.environ.get("ZBX_ADMIN_PASSWORD", "zabbix")
         self.url, self.auth, self.n = url, None, 0
         self.auth = self.call("user.login", {"username": user, "password": password})
 
