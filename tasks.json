@@ -123,7 +123,7 @@
       "number": 6,
       "kind": "task",
       "title": "(d) 試験：単体と、冗長構成での e2e（障害の入り切り・扉・UA が1回・libmgr と Zabbix に障害が出ない）",
-      "status": "ready",
+      "status": "backlog",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [
         "b-libmgr-sim-v1",
@@ -138,7 +138,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:33:01.794Z",
       "closedAt": null,
       "extra": {}
     }
