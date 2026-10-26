@@ -50,6 +50,97 @@
       "updatedAt": "2026-10-26T18:32:14.809Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "a-mhvtl-0003-ua-28h-00h",
+      "number": 3,
+      "kind": "task",
+      "title": "(a) mhVTL のパッチ 0003：チェンジャーの障害の命令・扉の命令・UA 28h/00h・管理用のビット",
+      "status": "ready",
+      "parent": "move-medium-unit-attention-mhvtl",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- usr/cmd/vtllibrary.c：\n  - メッセージキューに fault move <key> <asc> <ascq> [direction]・fault clear・fault status・door open・door close [noclear] を足す。\n  - 障害中は INITIALIZE ELEMENT STATUS（0x07・0xE7）も拒否する。\n  - 扉が開いている間、ロボットを動かす命令には NOT READY 04h/03h を返す。TUR と READ ELEMENT STATUS は既定で正常に答え、設定で NOT READY にもできる。BECOMING READY 04h/01h は既定で返さず、設定で秒数を足せる。\n  - door close で、UA 28h/00h（E_NOT_READY_TO_TRANSITION）を全体で1回出す旗を立て、既定で障害も消す。\n  - CDB の制御バイトの bit 6・7（ベンダービット）が立った命令には、UA も扉の NOT READY も返さず、UA を消費しない。\n- usr/smc.c の smc_move_medium：障害中は指定の sense を返す（direction で絞れる）。\n- usr/cmd/vtlcmd.c：ライブラリの許可リストと help に新しい命令を足す。\n- パッチは lab/images/base/patches/0003-*.patch として 0002 とは分け、build-base.sh の base64 の埋め込みに足す。patches/README.md にも書く。\n- 公開リポジトリなので、汎用の障害注入として書く。",
+      "doneWhen": "まっさらな 1.8-0_release に 0001〜0003 が git apply で当たって make が通る。/tmp の mhVTL で vtlcmd の新しい命令が受け付けられる。sg_raw で、MOVE MEDIUM が指定の sense で失敗すること、door close のあとの最初の命令に 28h/00h が1回だけ出ること、ベンダービット付きの命令は UA を消費しないことを確かめる。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "b-libmgr-sim-v1",
+      "number": 4,
+      "kind": "task",
+      "title": "(b) libmgr に試験用の口 /_sim/v1（障害・扉・状態）を足す",
+      "status": "ready",
+      "parent": "move-medium-unit-attention-mhvtl",
+      "dependsOn": [
+        "a-mhvtl-0003-ua-28h-00h"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- sim/libmgr の api.go・manager.go に次を足し、vtlcmd の新しい命令を呼ぶ。\n  - PUT と DELETE /_sim/v1/faults/move-medium {key, asc, ascq[, direction]}\n  - POST /_sim/v1/door/open\n  - POST /_sim/v1/door/close {clearFaults: 既定 true}\n  - GET /_sim/v1/state（障害・扉・UA の残りを mhVTL の fault status から返す）\n- /api/v1・SNMP・トラップには出さない。\n- 起動のときに入れ直す仕組みは作らない（VM を起こし直したら、deeparchive-sim が state を見て入れ直す）。",
+      "doneWhen": "単体の試験（Runner を偽物にして、vtlcmd に渡す引数と state の JSON を確かめる）が通る。/api/v1 と SNMP の出力が変わらない。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "c-libmgr-sg-raw-read-element-status-a",
+      "number": 5,
+      "kind": "task",
+      "title": "(c) libmgr の見回りを、ベンダービット付きの sg_raw と自前の READ ELEMENT STATUS の解析に替える（案A）",
+      "status": "ready",
+      "parent": "move-medium-unit-attention-mhvtl",
+      "dependsOn": [
+        "a-mhvtl-0003-ua-28h-00h"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- 見回りの TUR（sg_raw）の CDB の制御バイトにベンダービットを立て、UA を消費しないようにする。扉の NOT READY も受けないようにする。\n- mtx status をやめ、READ ELEMENT STATUS（0xB8）をベンダービット付きの sg_raw で送り、返ってきたデータを Go で解析して、いまの Elements（ドライブ・保管スロット・メールスロット・バーコード）を作る。\n- 解析は、いまの ParseMtxStatus と同じ結果になることを試験で確かめる。",
+      "doneWhen": "単体の試験（READ ELEMENT STATUS の返り値の見本から、mtx status と同じ Elements ができる）が通る。障害中・扉の開閉・UA を出したあとも、見回りで状態が offline にならない。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "d-e2e-ua-1-libmgr-zabbix",
+      "number": 6,
+      "kind": "task",
+      "title": "(d) 試験：単体と、冗長構成での e2e（障害の入り切り・扉・UA が1回・libmgr と Zabbix に障害が出ない）",
+      "status": "ready",
+      "parent": "move-medium-unit-attention-mhvtl",
+      "dependsOn": [
+        "b-libmgr-sim-v1",
+        "c-libmgr-sg-raw-read-element-status-a"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。ベースイメージ（lab/images/build-base.sh）と冗長構成の作り直しが要る。\n\n- 新しい e2e（例 tests/e2e-sim-faults.sh）で、srv1 から次を確かめる。\n  - 障害を入れると、MOVE MEDIUM と INITIALIZE ELEMENT STATUS が指定の sense で失敗する。READ ELEMENT STATUS は実際の在庫を返す。障害を外すと戻る。\n  - 扉が開いている間、ロボットを動かす命令は NOT READY 04h/03h になる。\n  - door close のあと、最初の命令で UA 28h/00h が1回だけ出て、2回目は出ない。既定で障害も消える。\n  - この間、libmgr の /api/v1 と SNMP は online のままで、Zabbix に新しい障害が出ない。\n- 既存の試験を流し直す。\n- 試験で入れた障害と扉の状態は、最後に必ず元に戻す。",
+      "doneWhen": "作り直した冗長構成で、新しい e2e が2回続けて全部 OK。tests/e2e-ha.sh・e2e-libmgr.sh・e2e-zabbix.sh も全部 OK。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
