@@ -56,7 +56,7 @@
       "number": 3,
       "kind": "task",
       "title": "(a) mhVTL のパッチ 0003：チェンジャーの障害の命令・扉の命令・UA 28h/00h・管理用のビット",
-      "status": "ready",
+      "status": "backlog",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [],
       "milestone": null,
@@ -68,7 +68,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:32:40.218Z",
+      "updatedAt": "2026-10-26T18:32:49.955Z",
       "closedAt": null,
       "extra": {}
     },
