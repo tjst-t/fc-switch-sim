@@ -166,6 +166,35 @@
       "updatedAt": "2026-10-27T08:12:43.473Z",
       "closedAt": "2026-10-27T08:12:43.473Z",
       "extra": {}
+    },
+    {
+      "id": "f1-f5",
+      "number": 7,
+      "kind": "story",
+      "title": "外部のトポロジから部品として使うための直し（F1〜F5）",
+      "status": "in-progress",
+      "parent": null,
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [
+        "reuse",
+        "reproducibility"
+      ],
+      "body": "## なぜ\nこのリポジトリの VM のイメージ・種（cloud-init）・スイッチのイメージを、別の containerlab のトポロジから部品として使えるようにする。いまの作りは lab/clab の構成（管理網 172.30.30.0/24・172.30.31.0/24、ノード名 srv1・lib1 など）に固まっていて、版も一部が固定されていない。メタ Project が 2026-10-27 に依頼した。\n\n公開リポジトリなので、一般の「外部のトポロジから使う」話として書く。\n\n## 中身\n- F1【中】prepare.sh から、種とディスクだけを、指定した置き場・ノード名・MAC・管理アドレスで作れる口。bind の約束事を docs に。既定の動き（run.clab.yml を作る）は変えない。\n- F2【中】版の固定：Debian 13 のクラウドイメージ（日付の版＋SHA512）、mhVTL（commit 469d79d）、image/Dockerfile のベースイメージ（digest）。\n- F3【低】prepare.sh が使わない構成でもホストの Go で libmgr を build している→コンテナの中で build するか、要らない構成では飛ばす。\n- F4【低】データ網の MTU が containerlab の既定（9500）に頼っていることを docs に書く。\n- F5【低〜中】build-base.sh が VM の中の build の失敗を外に伝える（終わりの印を確かめ、失敗なら非0）。\n\n## 確かめ方\n既存の e2e（single と冗長構成）が通る。F1 の口で、既定と違う名前・アドレスの種を作れる。F5 は、ふつうの build が成功で終わり、わざと失敗させた build（作業用の一時的な変更、commit しない）が非0で終わる。",
+      "doneWhen": "F1〜F5 が main に入り、e2e.sh（single）と e2e-ha.sh が作り直しから通る。F1 の口で既定と違う名前・アドレスの種とディスクができる。F5 で失敗の build が非0で終わる。",
+      "resolution": null,
+      "refs": [],
+      "threads": [
+        {
+          "projectId": "22a35639-1710-4609-9573-cd90978da057",
+          "threadId": "6e5b8021-d4a5-4161-a3d4-666870054a36"
+        }
+      ],
+      "createdAt": "2026-10-27T08:14:59.833Z",
+      "updatedAt": "2026-10-27T08:14:59.833Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
