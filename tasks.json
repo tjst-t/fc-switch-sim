@@ -369,13 +369,13 @@
         "firmware",
         "fault-injection"
       ],
-      "body": "## なぜ\n外部の自動化（IaC）が、テープライブラリの FW 更新の手順（版を見る → 更新する → 再起動する → 新しい版を確かめる）を試せるようにする。汎用の「FW 更新の模擬」として作る。実装の目安は 12 月中。\n\n## いまの様子（2026-10-27 に調べた）\n- libmgr は FW の版を返していない。REST の /api/v1（library・drives）にも、MIB（docs/FCSIM-TAPE-LIBRARY-MIB.txt、根 .1.3.6.1.4.1.99999.1）にも項目が無い。\n- mhVTL の INQUIRY の Product Revision Level（4 文字）は、/etc/mhvtl/device.conf の「Product revision level」から来る。いまはドライブが 2160。ライブラリはサーバの lsscsi で 0108 と見える（device.conf の値と、vtllibrary が INQUIRY で返す値の関係は、着手のときに確かめる）。\n\n## 決めること（着手のとき）\n- 版の持ち方：device.conf の Product revision level を正とし、INQUIRY と REST・SNMP が同じ値を返すようにするか、libmgr が別に持つか。INQUIRY と揃えるなら、更新のあと mhVTL の該当デーモンの起こし直し（またはパッチ）が要る。\n- 更新中の見せ方：ロボット・ドライブに NOT READY（04h/xx）を返すか、libmgr の状態を updating にするか、両方か。\n\n## 中身\n- タスクに分ける：(a) 版を返す（REST・SNMP・MIB）、(b) 更新の口と状態、(c) 失敗の注入（/_sim/v1）、(d) e2e。\n- 既定の動き（更新の口を使わないとき）は、いまと変えない。",
+      "body": "## なぜ\n外部の自動化（IaC）が、テープライブラリの FW 更新の手順（版を見る → 更新する → 再起動する → 新しい版を確かめる）を試せるようにする。汎用の「FW 更新の模擬」として作る。実装の目安は 12 月中。\n\n## いまの様子（2026-10-27 に調べた）\n- libmgr は FW の版を返していない。REST の /api/v1（library・drives）にも、MIB（docs/FCSIM-TAPE-LIBRARY-MIB.txt、根 .1.3.6.1.4.1.99999.1）にも項目が無い。\n- mhVTL の INQUIRY の Product Revision Level（4 文字）は、/etc/mhvtl/device.conf の「Product revision level」から来る。いまはドライブが 2160。ライブラリはサーバの lsscsi で 0108 と見える（device.conf の値と、vtllibrary が INQUIRY で返す値の関係は、着手のときに確かめる）。\n\n## 決まったこと（使う側の希望、2026-10-27）\n- **版の形**：文字列（例 \"2160\"）をそのまま返す。比べ方は使う側が持つ。\n- **REST**：装置ごと（library と各 drive）に、次を返す。\n  - いまの版\n  - 更新中なら目標の版\n  - 更新の状態（idle・updating・failed）\n  - 最後の更新の結果と時刻\n- **更新中の見え方**：\n  - REST と SNMP は応答を続け、状態を updating にする。\n  - SCSI では、ライブラリ本体の更新ならロボットに NOT READY を返す。ドライブの更新なら、そのドライブだけ NOT READY を返す。\n  - 着手の前に、外部のシミュレーターの更新中の見え方と突き合わせる。\n- **更新の呼び出し方**：REST の1回の呼び出しで始め、進み具合はポーリングで見る（完了を待つ同期の呼び出しにはしない）。\n\n## 決めること（着手のとき）\n- 版の持ち方：device.conf の Product revision level を正とし、INQUIRY と REST・SNMP が同じ値を返すようにするか、libmgr が別に持つか。INQUIRY と揃えるなら、更新のあと mhVTL の該当デーモンの起こし直し（またはパッチ）が要る。\n- NOT READY の ASC/ASCQ（更新中を表すもの）と、ドライブだけに出す仕組み（vtltape 側のパッチの要否）。\n\n## 中身\n- タスクに分ける：(a) 版を返す（REST・SNMP・MIB）、(b) 更新の口と状態、(c) 失敗の注入（/_sim/v1）、(d) e2e。\n- 既定の動き（更新の口を使わないとき）は、いまと変えない。",
       "doneWhen": "e2e で、版の読み出し → 更新 → 使えない間の応答 → 新しい版（再起動のあとも）、と、失敗の注入（途中で失敗・版が上がらない・時間切れ）を確かめる。既存の e2e（e2e-ha・e2e-sim-faults・e2e-libmgr・e2e-zabbix）が通る。",
       "resolution": null,
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-27T12:25:26.419Z",
-      "updatedAt": "2026-10-27T12:25:26.419Z",
+      "updatedAt": "2026-10-27T12:27:42.316Z",
       "closedAt": null,
       "extra": {}
     },
