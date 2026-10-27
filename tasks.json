@@ -451,14 +451,14 @@
       "number": 18,
       "kind": "task",
       "title": "(d) 試験：FW 更新の e2e と、既存の e2e",
-      "status": "ready",
+      "status": "backlog",
       "parent": "fw-fw-libmgr",
       "dependsOn": [
         "b-fw-rest",
         "c-fw-sim-v1"
       ],
       "milestone": null,
-      "priority": "normal",
+      "priority": "low",
       "labels": [],
       "body": "ストーリー #14 に従う。新しい e2e で、版の読み出し → 更新 → 使えない間の応答 → 新しい版（再起動のあとも）と、失敗の注入を確かめる。最後に版と注入を元に戻す。既存の e2e を流し直す。",
       "doneWhen": "新しい e2e が全部 OK。e2e-ha・e2e-sim-faults・e2e-libmgr・e2e-zabbix も全部 OK。",
@@ -466,7 +466,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-27T12:25:42.756Z",
-      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:26:03.423Z",
       "closedAt": null,
       "extra": {}
     }
