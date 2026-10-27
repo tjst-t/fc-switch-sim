@@ -143,7 +143,7 @@
       "number": 6,
       "kind": "task",
       "title": "(d) 試験：単体と、冗長構成での e2e（障害の入り切り・扉・UA が1回・libmgr と Zabbix に障害が出ない）",
-      "status": "in-progress",
+      "status": "done",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [
         "b-libmgr-sim-v1",
@@ -154,7 +154,7 @@
       "labels": [],
       "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。ベースイメージ（lab/images/build-base.sh）と冗長構成の作り直しが要る。\n\n- 新しい e2e（例 tests/e2e-sim-faults.sh）で、srv1 から次を確かめる。\n  - 障害を入れると、MOVE MEDIUM と INITIALIZE ELEMENT STATUS が指定の sense で失敗する。READ ELEMENT STATUS は実際の在庫を返す。障害を外すと戻る。\n  - 扉が開いている間、ロボットを動かす命令は NOT READY 04h/03h になる。\n  - door close のあと、最初の命令で UA 28h/00h が1回だけ出て、2回目は出ない。既定で障害も消える。\n  - この間、libmgr の /api/v1 と SNMP は online のままで、Zabbix に新しい障害が出ない。\n- 既存の試験を流し直す。\n- 試験で入れた障害と扉の状態は、最後に必ず元に戻す。",
       "doneWhen": "作り直した冗長構成で、新しい e2e が2回続けて全部 OK。tests/e2e-ha.sh・e2e-libmgr.sh・e2e-zabbix.sh も全部 OK。",
-      "resolution": null,
+      "resolution": "506f393。tests/e2e-sim-faults.sh。2026-10-27、作り直した冗長構成で2回続けて e2e-ha・e2e-sim-faults・e2e-libmgr・e2e-zabbix が全部 OK。",
       "refs": [],
       "threads": [
         {
@@ -163,8 +163,8 @@
         }
       ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-27T07:21:20.809Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:12:43.473Z",
+      "closedAt": "2026-10-27T08:12:43.473Z",
       "extra": {}
     }
   ]
