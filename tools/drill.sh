@@ -69,13 +69,13 @@ inject() {
           | curl -s -m 10 -X PUT $api/zoning -d @- >/dev/null
       done ;;
     lib1-offline) curl -s -m 10 -X POST http://$LIB1:8080/api/v1/library/offline >/dev/null ;;
-    srv1-reboot)
-      # VM の再起動ではリンクは落ちない（模擬の限り）。スイッチには、同じ WWPN の FLOGI のやり直し（ログアウト→ログイン）が残る
-      relogin() { for api in $SWA $SWB; do curl -s -m 5 "$api/events?n=40" | grep -q '20:00:52:54:00:fc:0[12]:01（FC_ID 0[12].00.00）がログアウトした' || return 1; done; }
-      wait_for 240 "両方のスイッチで srv1 がログインし直した（ログアウトの記録）" relogin ;;
     lib2-tapealert) curl -s -m 10 -X PUT http://$LIB2:8080/api/v1/drives/1/tapealert -d '{"flags":[20]}' >/dev/null ;;
     lib1-poweroff) redfish $LIB1 ForceOff ;;
-    srv1-reboot) redfish $SRV ForceRestart ;;
+    srv1-reboot)
+      # 起こす前の時刻を残す（ログインし直しの確かめは、この時刻より後の記録だけを見る）
+      date -u +%Y-%m-%dT%H:%M:%S.%NZ > $STATE/srv1-reboot.since
+      sleep 1
+      redfish $SRV ForceRestart ;;
     *) echo "知らないシナリオ $1" >&2; return 2 ;;
   esac
 }
@@ -93,10 +93,6 @@ recover() {
         [ -f $STATE/zoning-$f.json ] && curl -s -m 10 -X PUT $api/zoning -d @$STATE/zoning-$f.json >/dev/null
       done ;;
     lib1-offline) curl -s -m 10 -X POST http://$LIB1:8080/api/v1/library/online >/dev/null ;;
-    srv1-reboot)
-      # VM の再起動ではリンクは落ちない（模擬の限り）。スイッチには、同じ WWPN の FLOGI のやり直し（ログアウト→ログイン）が残る
-      relogin() { for api in $SWA $SWB; do curl -s -m 5 "$api/events?n=40" | grep -q '20:00:52:54:00:fc:0[12]:01（FC_ID 0[12].00.00）がログアウトした' || return 1; done; }
-      wait_for 240 "両方のスイッチで srv1 がログインし直した（ログアウトの記録）" relogin ;;
     lib2-tapealert) curl -s -m 10 -X PUT http://$LIB2:8080/api/v1/drives/1/tapealert -d '{"flags":[]}' >/dev/null ;;
     lib1-poweroff) redfish $LIB1 On ;;
     srv1-reboot) ;;   # 再起動はひとりでに戻る
@@ -111,9 +107,9 @@ extra_check() {
       CH=$(vm $SRV "for s in \$(lsscsi -g | awk '/mediumx/ {print \$NF}'); do sudo sg_vpd -p sn \$s 2>/dev/null | grep -qw LIB1_A && { echo \$s; break; }; done")
       vm $SRV "sudo mtx -f $CH status" >/dev/null 2>&1 && ng "オフラインなのに srv1 からロボットの命令が通った" || ok "srv1 からライブラリ 1 のロボットの命令が通らない（Not Ready）" ;;
     srv1-reboot)
-      # VM の再起動ではリンクは落ちない（模擬の限り）。スイッチには、同じ WWPN の FLOGI のやり直し（ログアウト→ログイン）が残る
-      relogin() { for api in $SWA $SWB; do curl -s -m 5 "$api/events?n=40" | grep -q '20:00:52:54:00:fc:0[12]:01（FC_ID 0[12].00.00）がログアウトした' || return 1; done; }
-      wait_for 240 "両方のスイッチで srv1 がログインし直した（ログアウトの記録）" relogin ;;
+      # VM の再起動ではリンクは落ちない（模擬の限り）。スイッチには、同じ WWPN の FLOGI のやり直し（ログイン）が残る。
+      # 起こしたあと（$STATE/srv1-reboot.since より後）の srv1 のログインが、両方のスイッチにあるかを見る
+      wait_for 240 "両方のスイッチで srv1 がログインし直した（起こしたあとのログインの記録）" relogin_since "$(cat $STATE/srv1-reboot.since)" ;;
     lib2-tapealert)
       D=$(vm $SRV "for s in \$(lsscsi -g | awk '/tape/ {print \$NF}'); do sudo sg_vpd -p sn \$s 2>/dev/null | grep -qw LIB2_A1 && { echo \$s; break; }; done")
       vm $SRV "sudo sg_logs -p 0x2e $D" | grep -q "Cleaning required: 1" && ok "srv1 が TapeAlert のログで読めた（Cleaning required）" || ng "srv1 の TapeAlert のログにフラグが無い" ;;
@@ -136,6 +132,20 @@ devs_are() { [ "$(devcount)" = "$1" ]; }
 has_problem() { problems | grep -q -F "$1"; }
 no_real_problem() { [ -z "$(real_problems)" ]; }
 setup_done() { vm $1 'test -f /var/log/fcsim-setup.rc'; }
+# relogin_since <時刻>：両方のスイッチに、その時刻より後の srv1（WWPN 20:00:52:54:00:fc:0[12]:01）のログインの記録があるか
+relogin_since() {
+  local api
+  for api in $SWA $SWB; do
+    curl -s -m 5 "$api/events?n=200" | python3 -c '
+import json, sys
+since = sys.argv[1]
+def ts(t):  # 2026-10-27T11:17:20.736446064Z → 比べられる形（秒の小数を 9 桁にそろえる）
+    t = t.rstrip("Z"); a, _, f = t.partition("."); return a + "." + (f + "000000000")[:9]
+ok = any(e.get("kind") == "login" and str(e.get("wwpn", "")).endswith(":01") and e.get("wwpn", "").startswith("20:00:52:54:00:fc:0")
+         and ts(e["time"]) > ts(since) for e in json.load(sys.stdin))
+sys.exit(0 if ok else 1)' "$1" || return 1
+  done
+}
 
 run_one() {
   local n=$1 desc want probs wait

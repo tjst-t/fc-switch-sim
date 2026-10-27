@@ -46,12 +46,16 @@ tools/drill.sh run all                    # 全部（約 25 分）
 | `zone-srv1-lib1` | ゾーンの誤り（srv1 とライブラリ 1 のゾーンを両方のファブリックから消す） | スイッチの API でゾーンを入れ替え | 20 → 10（ライブラリ 1 が見えない）約 15 秒 | 「fab-a / fab-b: zoning changed (SNMP trap)」（お知らせ、10 分） | 元のゾーンに戻す。数秒 |
 | `lib1-offline` | ライブラリ 1 のオフライン（ロボットが命令を受けない） | libmgr の API | 20 のまま。srv1 からロボットの命令が Not Ready | 「lib1 went offline (SNMP trap)」「lib1 is not online (SNMP)」「(REST)」数秒 | online に戻す。数秒 |
 | `lib2-tapealert` | ライブラリ 2 のドライブ 1 にクリーニングが要る（TapeAlert 20） | libmgr の API | 20 のまま。srv1 の TapeAlert のログ（`sg_logs -p 0x2e`）に Cleaning required | 「Drive 1 (LIB2_A1) on lib2: TapeAlert 20」「… TapeAlert raised (SNMP trap)」約 10 秒 | フラグを消す。数秒 |
-| `lib1-poweroff` | ライブラリ 1 の電源断 | Redfish の ForceOff | 20 → 10 約 30 秒 | 「lib1: SNMP not responding」（データが 1 分途絶えて） | Redfish の On。起動して FC の設定まで約 20 秒、20 に戻る |
-| `srv1-reboot` | サーバ srv1 の再起動 | Redfish の ForceRestart | 起動の間は見えない。起動後 20 | 無し（下の「模擬の限り」） | ひとりでに戻る。スイッチにはログアウトとログインの記録 |
+| `lib1-poweroff` | ライブラリ 1 の電源断 | Redfish の ForceOff | 20 → 10 約 30 秒 | 「lib1: SNMP not responding」（データが 1 分途絶えて） | Redfish の On。On から FC の設定が終わるまで約 40〜60 秒（ssh が届くまで約 25 秒、FC の設定に 12〜33 秒）、20 に戻る |
+| `srv1-reboot` | サーバ srv1 の再起動 | Redfish の ForceRestart | 起動の間は見えない。起動後 20 | 無し（下の「模擬の限り」） | ひとりでに戻る。起こしてから約 15 秒で、両方のスイッチに srv1 のログインし直しの記録 |
 
 ## 模擬の限り（本物と違うところ）
 
 - **時間**：FC の生存の確認は FCoE のキープアライブ（8 秒間隔）で、スイッチは 20 秒途絶えるとログアウトさせる。本物の FC のリンクの断の検知（ミリ秒）よりずっと遅い。
+- **電源断からの戻り**（2026-10-27、lib1-poweroff と同じ手順で 3 回ずつ測った。On の要求から、VM の中の `/var/log/fcsim-setup.rc` ができるまで）：
+  qemu-bmc 0.10.0 で 59.4・38.1・59.2 秒、0.9 で 59.5・38.8・58.7 秒（版による違いは無い）。ssh が届くまでは 25〜27 秒でそろっていて、
+  ばらつきは VM の中の FC の設定（fcsim-setup.service）にかかる時間（12 秒か 32〜34 秒）による。
+- **srv1-reboot の確かめ**は、起こす前の時刻を残し、それより後の srv1 のログインの記録だけを見る（前の訓練の記録では成り立たない）。
   ケーブル断はリンクの状態（1 秒ごとに見る）で、すぐに分かる。
 - **サーバの再起動でリンクが落ちない**：VM のリセットでは、コンテナの側のリンク（TAP・veth）は落ちない。サーバはリセットの数秒後に同じ WWPN でログインし直すので、
   スイッチのポートは Online のまま（本物なら光が途絶えてポートが落ちる）。スイッチの記録に「同じポートで FLOGI し直した」が残る。
