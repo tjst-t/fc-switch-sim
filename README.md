@@ -177,7 +177,7 @@ TapeAlert が SNMP・トラップ・サーバの TapeAlert のログに出る、
   ドライブ（vtltape）には出さない。
 - libmgr の見回り（TEST UNIT READY・READ ELEMENT STATUS）は CDB の CONTROL バイトのベンダー固有のビットを立てて送り、mhVTL はその命令に
   28h/00h・04h/01h・扉の NOT READY を返さない（見回りが UNIT ATTENTION を先に取ってしまわないため）。READ ELEMENT STATUS の返り値は
-  libmgr が自分で読む（`mtx` は使わない。番号の振り方は `mtx status` と同じで、実機の見本との突き合わせを単体の試験にしている）。
+  libmgr が自分で読む（`mtx` は使わない。番号の振り方は `mtx status` と同じで、ラボの VM（mhVTL）から採った見本との突き合わせを単体の試験にしている）。
 - ライブラリの VM の中では `vtlcmd 10 fault …`・`vtlcmd 10 door …` でも同じことができる。
 
 通しの試験（`tests/e2e-sim-faults.sh`、ライブラリ 1）：障害で MOVE MEDIUM・INITIALIZE ELEMENT STATUS が指定の sense で失敗し在庫は読める、`direction`、
@@ -266,7 +266,7 @@ sudo containerlab deploy -t lab/clab/run-ha.clab.yml
   （mhVTL の上限は load・unload・position が 20、rewind が 30。`man vtlcmd(1)`）。
 - 効くのは実際にドライブへ読み書き・`mt rewind`・`mt fsf` 等をしたとき（ロード中・巻き戻し中はドライブが Not Ready になり、
   `mt status` のような問い合わせだけのコマンドはカーネル側のキャッシュを返すため変化が見えない）。
-  2026-10-23、実機で `vtlcmd` で設定した秒数どおりにブロックされることを確認した（rewind 8 秒指定→実測 8.03 秒、
+  2026-10-23、ラボの VM で `vtlcmd` で設定した秒数どおりにブロックされることを確認した（rewind 8 秒指定→実測 8.03 秒、
   position 6 秒→実測 6.10 秒、load 15 秒→読み出しが 15.57 秒ブロック）。
 - 既定は無効：有効にすると読み書きのたびに数秒〜数十秒ブロックされ、既存の e2e テスト（`tests/e2e-ha.sh` 等）の
   タイムアウトや繰り返し回数の前提と噛み合わないため、デモ・手元での確認用に留める。

@@ -77,7 +77,7 @@ func buildRES(e Elements) []byte {
 	return append(h, body...)
 }
 
-// 実機（lib1 の mhVTL）から採った READ ELEMENT STATUS と mtx status の見本が、同じ Elements になる。
+// ラボの VM（lib1 の mhVTL）から採った READ ELEMENT STATUS と mtx status の見本が、同じ Elements になる。
 func TestParseElementStatusMatchesMtx(t *testing.T) {
 	for _, name := range []string{"l700-res.bin", "l700-res-loaded.bin"} {
 		raw, err := os.ReadFile("testdata/" + name)
