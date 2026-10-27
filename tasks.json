@@ -123,9 +123,9 @@
       "milestone": null,
       "priority": "normal",
       "labels": [],
-      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- 見回りの TUR（sg_raw）の CDB の制御バイトにベンダービットを立て、UA を消費しないようにする。扉の NOT READY も受けないようにする。\n- mtx status をやめ、READ ELEMENT STATUS（0xB8）をベンダービット付きの sg_raw で送り、返ってきたデータを Go で解析して、いまの Elements（ドライブ・保管スロット・メールスロット・バーコード）を作る。\n- 解析は、いまの ParseMtxStatus と同じ結果になることを試験で確かめる。",
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクに空きができてから。\n\n- 見回りの TUR（sg_raw）の CDB の制御バイトにベンダービットを立て、UA を消費しないようにする。扉の NOT READY も受けないようにする。\n- mtx status をやめ、READ ELEMENT STATUS（0xB8）をベンダービット付きの sg_raw で送り、返ってきたデータを Go で解析して、いまの Elements（ドライブ・保管スロット・メールスロット・バーコード）を作る。\n- 解析は、いまの ParseMtxStatus と同じ結果になることを試験で確かめる。",
       "doneWhen": "単体の試験（READ ELEMENT STATUS の返り値の見本から、mtx status と同じ Elements ができる）が通る。障害中・扉の開閉・UA を出したあとも、見回りで状態が offline にならない。",
-      "resolution": "506f393。sim/libmgr/res.go。lib1 の実機から採った READ ELEMENT STATUS と mtx status の見本で同じ Elements になる単体の試験。e2e で扉の notReady・UA の間も online、在庫が mtx と一致。",
+      "resolution": "506f393。sim/libmgr/res.go。lib1 の VM の mhVTL から採った READ ELEMENT STATUS と mtx status の見本で同じ Elements になる単体の試験。e2e で扉の notReady・UA の間も online、在庫が mtx と一致。",
       "refs": [],
       "threads": [
         {
@@ -134,7 +134,7 @@
         }
       ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-27T08:12:39.048Z",
+      "updatedAt": "2026-10-27T09:31:11.921Z",
       "closedAt": "2026-10-27T08:12:39.048Z",
       "extra": {}
     },
