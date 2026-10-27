@@ -305,7 +305,7 @@
       "number": 12,
       "kind": "task",
       "title": "F5 build-base.sh：VM の中の build の失敗を外に伝える（終わりの印を確かめ、失敗なら非0）",
-      "status": "in-progress",
+      "status": "done",
       "parent": "f1-f5",
       "dependsOn": [],
       "milestone": null,
@@ -313,7 +313,7 @@
       "labels": [],
       "body": "いまは cloud-init が失敗しても VM は最後に電源を切るだけで、build-base.sh は成功で終わる。VM の中で成功・失敗の印をシリアルコンソールに出し、build-base.sh がそれを確かめて、失敗・印なしなら非0で終わり、出来損ないのイメージを置かない。",
       "doneWhen": "ふつうの build が 0 で終わる。わざと失敗させた build（存在しない commit を指す等、作業用の一時的な変更で commit しない）が非0で終わり、出力のイメージを置き換えない。",
-      "resolution": null,
+      "resolution": "19ad428。ふつうの build は rc=0・FCSIM-BUILD-RESULT=OK。mhVTL の commit を存在しないものに一時的に変えた build は rc=1・FAIL と理由の行、出力は置き換えず .failed に（その変更は戻し、commit していない）。",
       "refs": [],
       "threads": [
         {
@@ -322,8 +322,8 @@
         }
       ],
       "createdAt": "2026-10-27T08:15:48.751Z",
-      "updatedAt": "2026-10-27T08:15:48.751Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:46:40.900Z",
+      "closedAt": "2026-10-27T08:46:40.900Z",
       "extra": {}
     }
   ]
