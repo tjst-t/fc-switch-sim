@@ -428,13 +428,13 @@
       "number": 17,
       "kind": "task",
       "title": "(c) FW 更新の失敗の注入：/_sim/v1 に、途中で失敗・版が上がらない・時間切れ",
-      "status": "ready",
+      "status": "backlog",
       "parent": "fw-fw-libmgr",
       "dependsOn": [
         "b-fw-rest"
       ],
       "milestone": null,
-      "priority": "normal",
+      "priority": "low",
       "labels": [],
       "body": "ストーリー #14 に従う。/_sim/v1 に、次の更新をわざと失敗させる口を足す（途中で失敗、終わっても版が上がらない、時間切れ）。/api/v1・SNMP には出さない。",
       "doneWhen": "単体の試験で、3 つの失敗がそれぞれ状態と版に出る。注入を消すと、ふつうの更新に戻る。",
@@ -442,7 +442,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-27T12:25:42.756Z",
-      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:59.890Z",
       "closedAt": null,
       "extra": {}
     },
