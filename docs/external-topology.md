@@ -41,11 +41,31 @@ lab/clab/prepare.sh seed -d <置き場> -n <ノード名> -r server|library -f <
 | `-m <MAC>` | 管理の NIC の MAC（既定 `52:54:00:aa:00:01`） |
 | `-a <アドレス/長さ>` `-g <GW>` `-s <DNS>` | 管理の NIC を固定のアドレスにする。省くと DHCP |
 | `-k <ファイル>` | VM のユーザ `lab` に入れる ssh の公開鍵（既定 `.cache/id_lab.pub`） |
+| `-K` | 置き場に前に作った差分ディスクと種があれば、作り直さずにそのまま使う（下の「状態を残したまま起こし直す」） |
 
 - libmgr を入れるときだけ libmgr を build する。ホストに Go が無ければ golang のコンテナ（digest で固定）の中で build する
   （`FCSIM_LIBMGR_BUILD=docker` でいつもコンテナで）。
 - `FCSIM_TAPE_DELAYS=1`（テープのロード・巻き戻しの時間を入れる）・`FCSIM_DEBUG=1` も、`prepare.sh single|ha` と同じように効く。
 - 引数を付けない `prepare.sh`・`prepare.sh single|ha` の動き（lab/clab の構成の `run.clab.yml` を作る）は変わらない。
+- `prepare.sh single` は、既定ではライブラリに libmgr を入れない。`FCSIM_LIBMGR=1` を付けると入れ（引数は `FCSIM_LIBMGR_ARGS`）、
+  `run.clab.yml` の lib1 の管理の NIC に 8080・161 の転送を足す。管理 API（`/api/v1`・SNMP）と障害注入の口（`/_sim/v1`）が使える。
+  確かめ方：`FCSIM_SRV=<サーバ> FCSIM_LIB=<ライブラリ> FCSIM_SER=XYZZY_A FCSIM_ZBX= tests/e2e-sim-faults.sh`（経路が 1 本なら、2 本目の確かめは飛ばす）。
+
+## 2.1 状態を残したまま起こし直す（`-K`・`FCSIM_KEEP_DISK=1`）
+
+既定では、`prepare.sh` を流すたびに差分ディスク（`disk.qcow2`）を作り直すので、VM の中の状態（mhVTL のテープの中身など）は消える。
+テープの中身と、外のプログラムが持つ記録（どのテープの何番目のファイルに何があるか）の寿命をそろえたいときは、
+`prepare.sh seed -K …` か `FCSIM_KEEP_DISK=1 prepare.sh single|ha` で、前の差分ディスクを使い続ける。
+
+- 差分ディスクを作るとき、置き場に `disk.base`（元の共通イメージの絶対パス・その sha256・作った時刻）を書く。
+- 使い続ける前に、`disk.qcow2` の元のパスと `disk.base` の記録が、いまの共通イメージ（`FCSIM_BASE`）のパスと sha256 に合うかを確かめる。
+  合わない・記録が無いときは、何も変えずに終了コード 3 で止まる（元の共通イメージが変わったあとに古い差分を使うと、ディスクが壊れるため）。
+- **種（`seed.iso`）も前のものをそのまま使う**。cloud-init の instance-id が変わらないので、初回の設定（ファイルの書き込み・ユーザ・
+  サービスの登録）はもう走らない。その代わり、`-n`・`-f`・`-L` などの引数を変えても効かない。設定を変えたいときは `-K` を外して作り直す
+  （テープの中身は消える）。
+- 置き場に差分ディスクが無いときは、ふつうに作る（最初の 1 回）。
+- FC の設定（FCoE・LIO のターゲット・mhVTL）は、VM の起動のたびに `fcsim-setup.service` が流すので、使い続けても毎回整う。
+- 試験の障害注入（`/_sim/v1`）の状態は mhVTL のメモリにだけあるので、起こし直すと消える。
 
 ## 3. コンテナ（qemu-bmc）への渡し方
 

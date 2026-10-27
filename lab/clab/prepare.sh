@@ -4,6 +4,7 @@
 #   prepare.sh [single|ha]
 #     single：fc-tape.clab.yml    → run.clab.yml（サーバ 1・ライブラリ 1・スイッチ 1）
 #     ha    ：fc-tape-ha.clab.yml → run-ha.clab.yml（サーバ 2・ライブラリ 2・ファブリック A と B）
+#     FCSIM_LIBMGR=1：single でもライブラリに管理 API（libmgr）を入れる。FCSIM_KEEP_DISK=1：差分ディスクと種を作り直さずに使う
 #   prepare.sh seed -d <置き場> -n <ノード名> -r server|library -f <FC の NIC の MAC[,MAC]> [ほかの引数]
 #     外部のトポロジ向け：VM 1 台ぶんの種（seed.iso）とディスク（disk.qcow2）だけを <置き場> に作る。
 #     スイッチのイメージも .clab.yml も作らない。引数とコンテナへの bind は docs/external-topology.md
@@ -41,6 +42,26 @@ if [ "${FCSIM_DEBUG:-}" = 1 ]; then
 else
   DEBUGCMD=true
 fi
+# FCSIM_KEEP_DISK=1（seed では -K）なら、置き場に前に作った差分ディスクと種があれば作り直さずにそのまま使う
+# （VM の中の状態＝テープの中身などを残したまま起こし直す）。差分ディスクの元が今の共通イメージと違えば止まる。
+KEEP_DISK=${FCSIM_KEEP_DISK:-}
+BASE_SHA=""
+base_sha() { [ -n "$BASE_SHA" ] || BASE_SHA=$(sha256sum "$BASE" | cut -d' ' -f1); echo "$BASE_SHA"; }
+# 置き場の差分ディスクを使い続けてよいか（元のパスと中身の sha256 が、作ったときの記録 disk.base と今の共通イメージで同じか）
+keep_ok() {
+  local d=$1 rec back
+  [ -f "$d/disk.qcow2" ] && [ -f "$d/seed.iso" ] || return 1   # 無ければ作る
+  rec="$d/disk.base"
+  [ -f "$rec" ] || { echo "$d/disk.qcow2 に元の記録（disk.base）が無い。使い続けられるか分からないので止まる（作り直すなら FCSIM_KEEP_DISK を外す）" >&2; exit 3; }
+  back=$(qemu-img info --force-share --output=json "$d/disk.qcow2" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("full-backing-filename",""))')
+  if [ "$back" != "$BASE" ] || [ "$(sed -n 's/^backing=//p' "$rec")" != "$BASE" ]; then
+    echo "$d/disk.qcow2 の元（$back）が今の共通イメージ（$BASE）と違う。止まる" >&2; exit 3
+  fi
+  if [ "$(sed -n 's/^base_sha256=//p' "$rec")" != "$(base_sha)" ]; then
+    echo "$d/disk.qcow2 を作ったあとに共通イメージ $BASE の中身が変わった（sha256 が違う）。古い差分は使えないので止まる" >&2; exit 3
+  fi
+  return 0
+}
 # 種の作り方を変える値（seed の前に決める。既定は lab/clab の構成のもの）
 MGMT_MAC=52:54:00:aa:00:01   # 管理の NIC の MAC（QEMU_EXTRA_ARGS の -nic user,mac= と同じにする）
 MGMT_ADDR=""                 # 空なら DHCP（qemu の user-net）。"10.0.0.5/24" のように書くと固定
@@ -49,6 +70,11 @@ MGMT_DNS=""
 seed() { # 名前 役割の命令 [libmgr の引数（ライブラリだけ）]。置き場は SEED_DIR（無ければ $RUN/名前）
   local name=$1 cmd=$2 d=${SEED_DIR:-$RUN/$1} lm=${3:-}
   local lmfiles="" lmcmd="true" PUB
+  if [ -n "$KEEP_DISK" ] && keep_ok "$d"; then
+    # 種も前のものを使う（instance-id が変わらないので、cloud-init の初回の設定はもう走らない。引数を変えても効かない）
+    echo "$name：前の差分ディスクと種をそのまま使う（$d）"
+    return 0
+  fi
   PUB=$(cat "$PUBFILE")
   if [ -n "$lm" ]; then
     libmgr_gz
@@ -70,6 +96,7 @@ seed() { # 名前 役割の命令 [libmgr の引数（ライブラリだけ）]�
   mkdir -p "$d"
   rm -f "$d/disk.qcow2"
   qemu-img create -q -f qcow2 -F qcow2 -b "$BASE" "$d/disk.qcow2" 20G
+  printf 'backing=%s\nbase_sha256=%s\ncreated=%s\n' "$BASE" "$(base_sha)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$d/disk.base"
   cat > "$d/user-data" <<UD
 #cloud-config
 hostname: $name
@@ -128,6 +155,7 @@ prepare.sh seed -d <置き場> -n <ノード名> -r server|library -f <FC の NI
   -m <MAC>          管理の NIC の MAC（既定 52:54:00:aa:00:01）
   -a <アドレス/長さ> 管理の NIC を固定のアドレスに（既定は DHCP）。-g <ゲートウェイ>・-s <DNS> も
   -k <ファイル>     VM のユーザ lab に入れる ssh の公開鍵（既定 .cache/id_lab.pub）
+  -K                前に作った差分ディスクと種があれば、作り直さずに使う（共通イメージが変わっていれば止まる）
 U
   exit 2
 }
@@ -135,12 +163,12 @@ case "$TOPO" in
   seed)
     shift
     DIR="" NAME="" ROLE="" FCMACS="" INIS="" LIBIDX=1 LMARGS="" WANT_LM=0
-    while getopts "d:n:r:f:I:i:L:m:a:g:s:k:" o; do
+    while getopts "d:n:r:f:I:i:L:m:a:g:s:k:K" o; do
       case $o in
         d) DIR=$OPTARG ;; n) NAME=$OPTARG ;; r) ROLE=$OPTARG ;; f) FCMACS=$OPTARG ;;
         I) INIS=$OPTARG ;; i) LIBIDX=$OPTARG ;; L) LMARGS=$OPTARG; WANT_LM=1 ;;
         m) MGMT_MAC=$OPTARG ;; a) MGMT_ADDR=$OPTARG ;; g) MGMT_GW=$OPTARG ;; s) MGMT_DNS=$OPTARG ;;
-        k) PUBFILE=$OPTARG ;; *) usage_seed ;;
+        k) PUBFILE=$OPTARG ;; K) KEEP_DISK=1 ;; *) usage_seed ;;
       esac
     done
     [ -n "$DIR" ] && [ -n "$NAME" ] && [ -n "$FCMACS" ] || usage_seed
@@ -169,7 +197,14 @@ fi
 sed "s|__CACHE__|$CACHE|g" $SRC > $OUT
 if [ "$TOPO" = single ]; then
   seed srv1 "/opt/fcsim/fcoe-up.sh 52:54:00:fc:00:01"
-  seed lib1 "/opt/fcsim/lib-setup.sh 52:54:00:fc:00:02 0x2000525400fc0001"
+  if [ "${FCSIM_LIBMGR:-}" = 1 ]; then
+    # FCSIM_LIBMGR=1：single でもライブラリに管理 API（libmgr：REST :8080・SNMP :161・/_sim/v1）を入れる（既定は入れない）。
+    # 引数は FCSIM_LIBMGR_ARGS（例 "-traps 172.30.30.30:162"）。lib1 の管理の NIC に 8080・161 の転送を足す
+    seed lib1 "/opt/fcsim/lib-setup.sh 52:54:00:fc:00:02 0x2000525400fc0001" "${FCSIM_LIBMGR_ARGS:- }"
+    awk '/^    lib1:/ {inlib=1} inlib && /QEMU_EXTRA_ARGS:/ && !done {sub(/hostfwd=tcp::22-:22"/, "hostfwd=tcp::22-:22,hostfwd=tcp::8080-:8080,hostfwd=udp::161-:161\""); done=1} {print}' $OUT > $OUT.tmp && mv $OUT.tmp $OUT
+  else
+    seed lib1 "/opt/fcsim/lib-setup.sh 52:54:00:fc:00:02 0x2000525400fc0001"
+  fi
 else
   # MAC：52:54:00:fc:<ファブリック 01=A・02=B>:<ノード 01=srv1・02=lib1・03=lib2>
   # ライブラリの LIO は両方のサーバを許す（どのサーバに見せるかはスイッチのゾーニングで決める）

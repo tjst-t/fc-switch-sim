@@ -300,7 +300,8 @@ curl -X POST localhost:8080/api/v1/ports/1/disable
 
 FC スイッチ（fcsw）・サーバの VM・テープライブラリの VM を、自分の containerlab のトポロジの部品として使える。
 `lab/clab/prepare.sh seed` で、VM 1 台ぶんの種とディスクを、置き場・ノード名・MAC・管理アドレスを指定して作る。
-コンテナへの bind、データ網の MTU（containerlab の既定 9500 に頼っている）、版の固定は `docs/external-topology.md`。動く例は `lab/external/`。
+コンテナへの bind、データ網の MTU（containerlab の既定 9500 に頼っている）、版の固定、状態を残したまま起こし直す口（`-K`・`FCSIM_KEEP_DISK=1`）、
+single の構成に libmgr を入れる口（`FCSIM_LIBMGR=1`）は `docs/external-topology.md`。動く例は `lab/external/`。
 
 ## ライセンス
 

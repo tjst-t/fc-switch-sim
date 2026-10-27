@@ -4,6 +4,9 @@
 #
 #   tests/e2e-sim-faults.sh            いま動いている構成で
 #   tests/e2e-sim-faults.sh --deploy   作り直してから
+#   ほかの構成で：FCSIM_SRV=<サーバの管理アドレス> FCSIM_LIB=<ライブラリの管理アドレス> FCSIM_SER=<ロボットのシリアル番号>
+#                 FCSIM_ZBX=<Zabbix の API の URL、空なら見ない> tests/e2e-sim-faults.sh
+#   （single の構成は libmgr を入れたとき：FCSIM_LIBMGR=1 lab/clab/prepare.sh single。経路が 1 本なら、2 本目の確かめは飛ばす）
 #
 # 確かめること：
 #   1. MOVE MEDIUM の障害（HARDWARE ERROR 44h/00h）：MOVE MEDIUM と INITIALIZE ELEMENT STATUS（07h・E7h）がその sense で失敗し、
@@ -24,12 +27,12 @@ if [ "${1:-}" = --deploy ]; then
   lab/clab/prepare.sh ha >/dev/null || { echo "prepare に失敗" >&2; exit 1; }
   sudo containerlab deploy -t lab/clab/run-ha.clab.yml >/dev/null || { echo "deploy に失敗" >&2; exit 1; }
 fi
-SRV=172.30.31.21
-LIB=172.30.31.22
-SER=LIB1_A
+SRV=${FCSIM_SRV:-172.30.31.21}
+LIB=${FCSIM_LIB:-172.30.31.22}
+SER=${FCSIM_SER:-LIB1_A}
 API=http://$LIB:8080/api/v1
 SIM=http://$LIB:8080/_sim/v1
-ZBX=http://172.30.31.42:8080/api_jsonrpc.php
+ZBX=${FCSIM_ZBX-http://172.30.31.42:8080/api_jsonrpc.php}
 E=.1.3.6.1.4.1.99999.1
 SSHO=(-i .cache/id_lab -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=10)
 srv() { ssh "${SSHO[@]}" lab@$SRV "$@"; }
@@ -73,10 +76,12 @@ addr_hex() { printf '%02X %02X' $(($1 >> 8)) $(($1 & 255)); }
 move_cdb() { echo "A5 00 00 00 $(addr_hex $1) $(addr_hex $2) 00 00 00 00"; }
 # Zabbix（動いていれば）の lib1 の障害
 zbx_lib1() {
-  python3 - <<'PY' 2>/dev/null
+  [ -n "$ZBX" ] || return 0
+  ZBX="$ZBX" python3 - <<'PY' 2>/dev/null
 import importlib.util
 spec = importlib.util.spec_from_file_location("zs", "tests/zabbix-setup.py"); zs = importlib.util.module_from_spec(spec); spec.loader.exec_module(zs)
-z = zs.Zbx("http://172.30.31.42:8080/api_jsonrpc.php")
+import os
+z = zs.Zbx(os.environ["ZBX"])
 for p in z.call("problem.get", {"output": ["name"]}):
     if "lib1" in p["name"]:
         print(p["name"])
@@ -97,7 +102,9 @@ wait_for 300 "lib1 の REST が答える" curl -sf -m 3 -o /dev/null $API/librar
 wait_for 60 "lib1 の /_sim/v1 が答える" curl -sf -m 3 -o /dev/null $SIM/state
 mapfile -t CHS < <(robots)
 CH=${CHS[0]:-}; CH2=${CHS[1]:-}
-[ -n "$CH" ] && [ -n "$CH2" ] && ok "srv1 からライブラリ 1 のロボットが経路 2 本で見える（$CH・$CH2）" || { ng "ロボットが 2 本見えない（${CHS[*]}）"; exit 1; }
+[ -n "$CH" ] || { ng "サーバからロボット $SER が見えない"; exit 1; }
+if [ -n "$CH2" ]; then ok "サーバからロボットが経路 2 本で見える（$CH・$CH2）"; else ok "サーバからロボットが経路 1 本で見える（$CH。2 本目の確かめは飛ばす）"; fi
+two() { [ -n "$CH2" ]; }
 restore
 # 経路 2 にもたまっている UA（電源投入など、元からあるもの）を消しておく
 for c in $CH $CH2; do for i in 1 2 3; do [ "$(scsi $c $TUR)" = GOOD ] && break; done; done
@@ -123,7 +130,7 @@ BEFORE=$(inventory)
 R=$(sim PUT faults/move-medium '{"key":4,"asc":"44","ascq":0}')
 [ "$(jq_ 'd["faults"]["moveMedium"]["sense"]' <<<"$R")" = 04/44/00 ] && ok "障害を入れた（state の sense 04/44/00）" || ng "障害が入らない：$R"
 expect 04/44/00 "MOVE MEDIUM（スロット 1 → ドライブ 1）" $CH $(move_cdb $SLOT1 $DRV0)
-expect 04/44/00 "MOVE MEDIUM（経路 2）" $CH2 $(move_cdb $SLOT1 $DRV0)
+two && expect 04/44/00 "MOVE MEDIUM（経路 2）" $CH2 $(move_cdb $SLOT1 $DRV0)
 expect 04/44/00 "INITIALIZE ELEMENT STATUS（07h）" $CH $IES
 expect 04/44/00 "INITIALIZE ELEMENT STATUS WITH RANGE（E7h）" $CH $IESR
 expect GOOD "TEST UNIT READY" $CH $TUR
@@ -166,7 +173,7 @@ sleep 6
 [ "$(simst 'd["unitAttentionPending"]')" = True ] && ok "6 秒たっても UA は残っている（見回りが取らない）" || ng "UA を見回りに取られた"
 expect 06/28/00 "最初の命令（TEST UNIT READY）に UNIT ATTENTION 28h/00h" $CH $TUR
 expect GOOD "2 回目は GOOD" $CH $TUR
-expect GOOD "別の経路も GOOD（全体で1回）" $CH2 $TUR
+two && expect GOOD "別の経路も GOOD（全体で1回）" $CH2 $TUR
 [ "$(simst 'd["unitAttentionPending"]')" = False ] && ok "state の UA が消えた" || ng "state の UA が残っている"
 srv "sudo mtx -f $CH load 1 0" >/dev/null 2>&1 && srv "sudo mtx -f $CH unload 1 0" >/dev/null 2>&1 \
   && ok "障害が消えていて、テープを出し入れできる" || ng "閉じたあと出し入れできない"
@@ -187,7 +194,7 @@ check_online "最後"
 wait_for 10 "libmgr の在庫（REST）がサーバの mtx status と一致" inv_same
 EV=$(curl -s -m 5 "$API/events?n=200" | jq_ "len([e for e in d if e['kind']=='libraryStatusChange' and e['time']>='$MARK'])")
 [ "$EV" = 0 ] && ok "試験の間に libmgr の状態の変化の出来事が無い" || ng "状態の変化の出来事が $EV 件"
-if curl -s -m 3 -o /dev/null $ZBX; then
+if [ -n "$ZBX" ] && curl -s -m 3 -o /dev/null $ZBX; then
   sleep 30
   Z=$(zbx_lib1)
   [ "$Z" = "$ZBASE" ] && ok "Zabbix に lib1 の新しい障害が無い" || ng "Zabbix に lib1 の障害：$Z"
