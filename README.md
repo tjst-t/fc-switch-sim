@@ -73,7 +73,7 @@ lab/direct/      直結の試験の場：VM 2 台を TAP でスイッチにつ�
 srv1（qemu-bmc の VM）eth1 ──── eth1 fab-a（fcsw のコンテナ）eth2 ──── eth1 lib1（qemu-bmc の VM、mhVTL）
 ```
 
-- VM は `ghcr.io/tjst-t/qemu-bmc:0.9`。FC の NIC の MTU は `VM_NET_MTU: "9500"`（TAP・ブリッジ・virtio-net の host_mtu をそろえて上げる）。Redfish・IPMI で電源を操作できる（`https://172.30.30.21/redfish/v1`、admin / password）。
+- VM は `ghcr.io/tjst-t/qemu-bmc:0.10.0`（digest で固定）。FC の NIC の MTU は `VM_NET_MTU: "9500"`（TAP・ブリッジ・virtio-net の host_mtu をそろえて上げる）。Redfish・IPMI で電源を操作できる（`https://172.30.30.21/redfish/v1`、admin / password）。
 - VM は cloud-init で起動時に FC の設定まで済ませる（サーバ：`fcoe-up.sh`、ライブラリ：`lib-setup.sh`）。
 - VM への ssh：`ssh -i .cache/id_lab lab@172.30.30.21`（srv1）・`.22`（lib1）。スイッチの API：`http://172.30.30.10:8080/api/v1/`。
 

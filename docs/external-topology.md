@@ -100,7 +100,7 @@ FCoE は 1 フレームが最大 2158 バイトある。経路の途中のどこ
 | Debian 13 のクラウドイメージ | 日付の版（`20261021-2638`）と SHA512。合わなければ `build-base.sh` が止まる | `lab/images/build-base.sh` |
 | mhVTL | commit `469d79dc5b518d9eead9a18e6d3272b89350118e`（タグ 1.8-0_release）と、`lab/images/base/patches/` のパッチ | `lab/images/base/user-data` |
 | fcsw・監視局のベースイメージ | `golang:1.26-bookworm`・`debian:bookworm-slim` を digest で | `image/Dockerfile`・`image/mon/Dockerfile` |
-| qemu-bmc | タグ `0.9` | 各 `.clab.yml` |
+| qemu-bmc | タグ `0.10.0` と digest `sha256:875c9b6490eb444821a5dbcde348716bedfce767563d4c683728b7185022526a` | 各 `.clab.yml` |
 
 - Debian のクラウドイメージの日付の版は、配布元で古いものが消えることがある。消えたら、新しい版の URL と `SHA512SUMS` の値に書き換える。
 - Debian のパッケージ（fcoe-utils・targetcli-fb など）は、build したときの Debian 13 のリポジトリのもの（固定していない）。

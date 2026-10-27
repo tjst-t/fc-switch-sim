@@ -23,7 +23,7 @@ mgmt:
 topology:
   kinds:
     linux:
-      image: ghcr.io/tjst-t/qemu-bmc:0.9
+      image: ghcr.io/tjst-t/qemu-bmc:0.10.0@sha256:875c9b6490eb444821a5dbcde348716bedfce767563d4c683728b7185022526a
   nodes:
     fab-a:
       kind: linux
