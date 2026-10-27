@@ -61,7 +61,7 @@
       "number": 3,
       "kind": "task",
       "title": "(a) mhVTL のパッチ 0003：チェンジャーの障害の命令・扉の命令・UA 28h/00h・管理用のビット",
-      "status": "backlog",
+      "status": "in-progress",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [],
       "milestone": null,
@@ -71,9 +71,14 @@
       "doneWhen": "まっさらな 1.8-0_release に 0001〜0003 が git apply で当たって make が通る。/tmp の mhVTL で vtlcmd の新しい命令が受け付けられる。sg_raw で、MOVE MEDIUM が指定の sense で失敗すること、door close のあとの最初の命令に 28h/00h が1回だけ出ること、ベンダービット付きの命令は UA を消費しないことを確かめる。",
       "resolution": null,
       "refs": [],
-      "threads": [],
+      "threads": [
+        {
+          "projectId": "22a35639-1710-4609-9573-cd90978da057",
+          "threadId": "6e5b8021-d4a5-4161-a3d4-666870054a36"
+        }
+      ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:32:49.955Z",
+      "updatedAt": "2026-10-27T07:21:06.654Z",
       "closedAt": null,
       "extra": {}
     },
