@@ -299,6 +299,32 @@
       "updatedAt": "2026-10-27T08:15:42.103Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "f5-build-base-sh-vm-build-0",
+      "number": 12,
+      "kind": "task",
+      "title": "F5 build-base.sh：VM の中の build の失敗を外に伝える（終わりの印を確かめ、失敗なら非0）",
+      "status": "in-progress",
+      "parent": "f1-f5",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "いまは cloud-init が失敗しても VM は最後に電源を切るだけで、build-base.sh は成功で終わる。VM の中で成功・失敗の印をシリアルコンソールに出し、build-base.sh がそれを確かめて、失敗・印なしなら非0で終わり、出来損ないのイメージを置かない。",
+      "doneWhen": "ふつうの build が 0 で終わる。わざと失敗させた build（存在しない commit を指す等、作業用の一時的な変更で commit しない）が非0で終わり、出力のイメージを置き換えない。",
+      "resolution": null,
+      "refs": [],
+      "threads": [
+        {
+          "projectId": "22a35639-1710-4609-9573-cd90978da057",
+          "threadId": "6e5b8021-d4a5-4161-a3d4-666870054a36"
+        }
+      ],
+      "createdAt": "2026-10-27T08:15:48.751Z",
+      "updatedAt": "2026-10-27T08:15:48.751Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
