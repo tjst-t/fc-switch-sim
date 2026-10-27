@@ -61,7 +61,7 @@
       "number": 3,
       "kind": "task",
       "title": "(a) mhVTL のパッチ 0003：チェンジャーの障害の命令・扉の命令・UA 28h/00h・管理用のビット",
-      "status": "in-progress",
+      "status": "done",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [],
       "milestone": null,
@@ -69,7 +69,7 @@
       "labels": [],
       "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- usr/cmd/vtllibrary.c：\n  - メッセージキューに fault move <key> <asc> <ascq> [direction]・fault clear・fault status・door open・door close [noclear] を足す。\n  - 障害中は INITIALIZE ELEMENT STATUS（0x07・0xE7）も拒否する。\n  - 扉が開いている間、ロボットを動かす命令には NOT READY 04h/03h を返す。TUR と READ ELEMENT STATUS は既定で正常に答え、設定で NOT READY にもできる。BECOMING READY 04h/01h は既定で返さず、設定で秒数を足せる。\n  - door close で、UA 28h/00h（E_NOT_READY_TO_TRANSITION）を全体で1回出す旗を立て、既定で障害も消す。\n  - CDB の制御バイトの bit 6・7（ベンダービット）が立った命令には、UA も扉の NOT READY も返さず、UA を消費しない。\n- usr/smc.c の smc_move_medium：障害中は指定の sense を返す（direction で絞れる）。\n- usr/cmd/vtlcmd.c：ライブラリの許可リストと help に新しい命令を足す。\n- パッチは lab/images/base/patches/0003-*.patch として 0002 とは分け、build-base.sh の base64 の埋め込みに足す。patches/README.md にも書く。\n- 公開リポジトリなので、汎用の障害注入として書く。",
       "doneWhen": "まっさらな 1.8-0_release に 0001〜0003 が git apply で当たって make が通る。/tmp の mhVTL で vtlcmd の新しい命令が受け付けられる。sg_raw で、MOVE MEDIUM が指定の sense で失敗すること、door close のあとの最初の命令に 28h/00h が1回だけ出ること、ベンダービット付きの命令は UA を消費しないことを確かめる。",
-      "resolution": null,
+      "resolution": "506f393。パッチ 0003（vtllibrary・vtlcmd・vtllib）。まっさらな 1.8-0_release に 0001〜0003 が当たり make が通る。障害の判定は smc_move_medium ではなく vtllibrary の processCommand の前段（sim_check）で行う。ベンダーのビットは処理の前に消す（mhVTL の READ ELEMENT STATUS は byte 11 が 0 でないと ILLEGAL REQUEST のため）。",
       "refs": [],
       "threads": [
         {
@@ -78,8 +78,8 @@
         }
       ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-27T07:21:06.654Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:12:27.976Z",
+      "closedAt": "2026-10-27T08:12:27.976Z",
       "extra": {}
     },
     {
