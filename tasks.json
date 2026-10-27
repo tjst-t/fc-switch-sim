@@ -195,6 +195,32 @@
       "updatedAt": "2026-10-27T08:14:59.833Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "f1-prepare-sh-mac",
+      "number": 8,
+      "kind": "task",
+      "title": "F1 prepare.sh：種とディスクだけを、置き場・ノード名・MAC・管理アドレスを指定して作る口",
+      "status": "in-progress",
+      "parent": "f1-f5",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "いまは run.clab.yml を作る処理と一体で、run/srv1・run/lib1 の固定の名前・172.30.30.0/24 に頼っている。種（cloud-init の user-data・network-config）とディスク（共通イメージの差分）だけを作る口を足し、コンテナのどこに bind すればよいか（qemu-bmc の約束）を docs に書く。既定の動きは変えない。",
+      "doneWhen": "新しい口で、既定と違う置き場・名前・MAC・管理アドレスの種とディスクができ、中身（hostname・アドレス・MAC）が指定どおり。既定の prepare.sh single・ha の出力は変わらず、e2e.sh・e2e-ha.sh が通る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [
+        {
+          "projectId": "22a35639-1710-4609-9573-cd90978da057",
+          "threadId": "6e5b8021-d4a5-4161-a3d4-666870054a36"
+        }
+      ],
+      "createdAt": "2026-10-27T08:15:22.986Z",
+      "updatedAt": "2026-10-27T08:15:22.986Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
