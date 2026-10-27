@@ -131,12 +131,11 @@ func (m *Manager) Poll() {
 	} else if !testUnitReady(m.run, robot) {
 		status = StatusOffline
 	} else {
-		out, err := m.run("mtx", "-f", robot, "status")
-		if e, perr := ParseMtxStatus(out); err == nil && perr == nil {
+		if e, err := readElementStatus(m.run, robot); err == nil {
 			status, el = StatusOnline, &e
 		} else {
 			// TEST UNIT READY は通ったのに読めない：一時的なもの。前の要素のまま、状態は online とする
-			m.log.Warn("mtx status が読めない", "err", err, "perr", perr)
+			m.log.Warn("READ ELEMENT STATUS が読めない", "err", err)
 			status = StatusOnline
 		}
 	}

@@ -16,6 +16,8 @@ import (
 //	POST /api/v1/library/offline            オフラインにする（サーバからのロボットの命令は Not Ready になる）
 //	PUT  /api/v1/drives/{n}/tapealert       {"flags":[15]}：TapeAlert のフラグを立てる（[] で消す）
 //	POST /api/v1/import                     {"barcode":"IMP001L8"}：新しいテープをメールスロットに入れる
+//
+// 試験用の口 /_sim/v1（データプレーンへの障害注入）は sim.go。
 func Handler(m *Manager) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/library", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, m.State()) })
@@ -76,6 +78,7 @@ func Handler(m *Manager) http.Handler {
 		}
 		writeJSON(w, 200, m.State().Slots)
 	})
+	simHandlers(mux, m)
 	return mux
 }
 

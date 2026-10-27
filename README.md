@@ -136,7 +136,7 @@ tests/e2e-ha.sh            # --deploy で作り直しから
 
 モニタリングツールが使う口の模擬。ベンダーに依らない形（REST・SNMP・SNMP トラップ）。冗長構成（fc-tape-ha）のライブラリの VM に入っている。
 
-- `libmgr`（`cmd/libmgr`・`sim/libmgr`）はライブラリの VM の中で動き、mhVTL の状態を 2 秒ごとに読む（ロボットへの READ ELEMENT STATUS と TEST UNIT READY）。
+- `libmgr`（`cmd/libmgr`・`sim/libmgr`）はライブラリの VM の中で動き、mhVTL の状態を 2 秒ごとに読む（ロボットへの READ ELEMENT STATUS と TEST UNIT READY を `sg_raw` で）。
   サーバが FC 越しにテープを出し入れすると、それがそのまま管理 API に出る。
 - REST：`http://172.30.31.22:8080/api/v1/`（lib1）・`.23`（lib2）
 
@@ -155,6 +155,34 @@ tests/e2e-ha.sh            # --deploy で作り直しから
 
 通しの試験（`tests/e2e-libmgr.sh`）：REST と SNMP が一致する、サーバのテープの出し入れが SNMP とトラップに出る、オフラインでサーバの命令が通らなくなりトラップが出る、
 TapeAlert が SNMP・トラップ・サーバの TapeAlert のログに出る、投入したテープがメールスロットに入りサーバから見えて、保管スロットへ移すとトラップが出る、ライブラリ 2 からもトラップが届く。
+
+## チェンジャーの障害注入（試験用の口 `/_sim/v1`）
+
+テープを使うアプリが、ロボットの異常（MOVE MEDIUM の失敗・扉が開いている・扉を閉じたあとの UNIT ATTENTION）をどう扱うかを試すための、
+汎用の障害注入。サーバから FC 越しに見える SCSI の答え（データプレーン）だけを変え、管理 API（`/api/v1`）・SNMP・トラップには出さない
+（障害の間もライブラリは online のまま）。mhVTL のパッチ `0003`（`lab/images/base/patches/README.md`）と libmgr で作っている。
+
+- 口：`http://172.30.31.22:8080/_sim/v1/`（lib1）・`.23`（lib2）
+
+  | | |
+  |---|---|
+  | `GET /state` | いまの障害・扉・待っている UNIT ATTENTION・BECOMING READY の残りの秒数 |
+  | `PUT /faults/move-medium` `{"key":4,"asc":"44","ascq":0,"direction":"any"}` | MOVE MEDIUM と INITIALIZE ELEMENT STATUS（07h・E7h）を、この sense で失敗させる（数は 10 進、文字列は 16 進）。`direction` は `any`・`load`（ドライブへ入れる移動だけ）・`unload`（ドライブから出す移動だけ）。READ ELEMENT STATUS は実際の在庫を返す |
+  | `DELETE /faults/move-medium` | 障害を消す |
+  | `POST /door/open` `{"notReady":false}` | 扉を開ける。ロボットを動かす命令は NOT READY 04h/03h。`notReady:true` なら TEST UNIT READY・READ ELEMENT STATUS も |
+  | `POST /door/close` `{"clearFaults":true,"becomingReadySeconds":0}` | 扉を閉じる。次のチェンジャーへの命令（どの経路・どのサーバからでも、全体で1回）に UNIT ATTENTION 28h/00h。既定で障害も消す。`becomingReadySeconds` の間は先に NOT READY 04h/01h |
+
+- 答えはどれも `GET /state` と同じ形。状態はライブラリの VM の mhVTL のメモリにだけあり、VM を起こし直すと消える（入れ直すのは呼ぶ側）。
+- UNIT ATTENTION は当面チェンジャーだけで、経路ごとではなく全体で1回（経路ごとに出すには LIO の target_core_mod に手を入れる必要がある）。
+  ドライブ（vtltape）には出さない。
+- libmgr の見回り（TEST UNIT READY・READ ELEMENT STATUS）は CDB の CONTROL バイトのベンダー固有のビットを立てて送り、mhVTL はその命令に
+  28h/00h・04h/01h・扉の NOT READY を返さない（見回りが UNIT ATTENTION を先に取ってしまわないため）。READ ELEMENT STATUS の返り値は
+  libmgr が自分で読む（`mtx` は使わない。番号の振り方は `mtx status` と同じで、実機の見本との突き合わせを単体の試験にしている）。
+- ライブラリの VM の中では `vtlcmd 10 fault …`・`vtlcmd 10 door …` でも同じことができる。
+
+通しの試験（`tests/e2e-sim-faults.sh`、ライブラリ 1）：障害で MOVE MEDIUM・INITIALIZE ELEMENT STATUS が指定の sense で失敗し在庫は読める、`direction`、
+扉が開いている間の 04h/03h、閉じたあとの 28h/00h が全体で1回（見回りに取られず、別の経路は GOOD）、`clearFaults`・`becomingReadySeconds`、
+その間 REST・SNMP が online のままで状態の変化の出来事も Zabbix の lib1 の障害も無いこと。最後に元に戻す。
 
 ## Zabbix での監視
 
@@ -246,7 +274,9 @@ sudo containerlab deploy -t lab/clab/run-ha.clab.yml
 ## 動かし方（直結の試験の場）
 
 ```
-lab/images/build-base.sh          # VM の共通イメージを作る（.cache/fcsim-base.qcow2、KVM が要る）
+lab/images/build-base.sh          # VM の共通イメージを作る（.cache/fcsim-base.qcow2、KVM が要る。
+                                  # FCSIM_BASE=<パス> で別の名前に。prepare.sh も同じ変数でそのイメージを使う。
+                                  # 動いている VM のディスクは今のイメージの差分なので、作り直すときは上書きしない）
 lab/direct/up.sh                  # TAP・fcsw・VM 2 台を起こす
 # ライブラリ VM の中で：lib-setup.sh ens4 <サーバの WWPN>
 # サーバ VM の中で：fcoe-up.sh ens4

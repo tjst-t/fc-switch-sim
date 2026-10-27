@@ -1,0 +1,48 @@
+  Storage Changer /dev/sg5:4 Drives, 43 Slots ( 4 Import/Export )
+Data Transfer Element 0:Empty
+Data Transfer Element 1:Empty
+Data Transfer Element 2:Full (Storage Element 30 Loaded):VolumeTag = F01030L6                            
+Data Transfer Element 3:Empty
+      Storage Element 1:Full :VolumeTag=E11001LA                            
+      Storage Element 2:Full :VolumeTag=E11002LA                            
+      Storage Element 3:Full :VolumeTag=E11003LA                            
+      Storage Element 4:Full :VolumeTag=E11004LA                            
+      Storage Element 5:Full :VolumeTag=E11005LA                            
+      Storage Element 6:Full :VolumeTag=E11006LA                            
+      Storage Element 7:Full :VolumeTag=E11007LA                            
+      Storage Element 8:Full :VolumeTag=E11008LA                            
+      Storage Element 9:Full :VolumeTag=E11009LA                            
+      Storage Element 10:Full :VolumeTag=E11010LA                            
+      Storage Element 11:Full :VolumeTag=E11011LA                            
+      Storage Element 12:Full :VolumeTag=E11012LA                            
+      Storage Element 13:Full :VolumeTag=E11013LA                            
+      Storage Element 14:Full :VolumeTag=E11014LA                            
+      Storage Element 15:Full :VolumeTag=E11015LA                            
+      Storage Element 16:Full :VolumeTag=E11016LA                            
+      Storage Element 17:Full :VolumeTag=E11017LA                            
+      Storage Element 18:Full :VolumeTag=E11018LA                            
+      Storage Element 19:Full :VolumeTag=E11019LA                            
+      Storage Element 20:Full :VolumeTag=E11020LA                            
+      Storage Element 21:Empty
+      Storage Element 22:Full :VolumeTag=CLN101LA                            
+      Storage Element 23:Full :VolumeTag=CLN102L6                            
+      Storage Element 24:Empty
+      Storage Element 25:Empty
+      Storage Element 26:Empty
+      Storage Element 27:Empty
+      Storage Element 28:Empty
+      Storage Element 29:Empty
+      Storage Element 30:Empty
+      Storage Element 31:Full :VolumeTag=F01031L6                            
+      Storage Element 32:Full :VolumeTag=F01032L6                            
+      Storage Element 33:Full :VolumeTag=F01033L6                            
+      Storage Element 34:Full :VolumeTag=F01034L6                            
+      Storage Element 35:Full :VolumeTag=F01035L6                            
+      Storage Element 36:Full :VolumeTag=F01036L6                            
+      Storage Element 37:Full :VolumeTag=F01037L6                            
+      Storage Element 38:Full :VolumeTag=F01038L6                            
+      Storage Element 39:Full :VolumeTag=F01039L6                            
+      Storage Element 40 IMPORT/EXPORT:Empty
+      Storage Element 41 IMPORT/EXPORT:Empty
+      Storage Element 42 IMPORT/EXPORT:Empty
+      Storage Element 43 IMPORT/EXPORT:Empty

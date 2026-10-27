@@ -1,0 +1,362 @@
+From b7a742e70fcf7d57ef24c73a961a58fa7909e218 Mon Sep 17 00:00:00 2001
+From: a <a@a>
+Date: Tue, 27 Oct 2026 07:24:20 +0000
+Subject: [PATCH] local: changer fault injection (MOVE MEDIUM sense, door, UNIT
+ ATTENTION 28h/00h) for simulation
+
+---
+ include/vtllib.h     |   1 +
+ usr/cmd/vtlcmd.c     |  58 +++++++++++++-
+ usr/cmd/vtllibrary.c | 181 +++++++++++++++++++++++++++++++++++++++++++
+ usr/vtllib.c         |   6 ++
+ 4 files changed, 245 insertions(+), 1 deletion(-)
+
+diff --git a/include/vtllib.h b/include/vtllib.h
+index 77a08c1..428053c 100644
+--- a/include/vtllib.h
++++ b/include/vtllib.h
+@@ -675,6 +675,7 @@ void sam_medium_error(uint16_t ascq, uint8_t *sam_stat);
+ void sam_blank_check(uint16_t ascq, uint8_t *sam_stat);
+ void sam_data_protect(uint16_t ascq, uint8_t *sam_stat);
+ void sam_hardware_error(uint16_t ascq, uint8_t *sam_stat);
++void sam_sense(uint8_t key, uint16_t ascq, uint8_t *sam_stat);
+ void sam_no_sense(uint8_t key, uint16_t ascq, uint8_t *sam_stat);
+ 
+ void		 resp_log_select(uint8_t *, uint8_t *);
+diff --git a/usr/cmd/vtlcmd.c b/usr/cmd/vtlcmd.c
+index 55b3d23..48ae139 100644
+--- a/usr/cmd/vtlcmd.c
++++ b/usr/cmd/vtlcmd.c
+@@ -87,6 +87,14 @@ static void usage(char *prog) {
+ 	fprintf(stderr, "   open map     -> Open map to allow media export\n");
+ 	fprintf(stderr, "   close map    -> Close map to allow media import\n");
+ 	fprintf(stderr, "   load map ID  -> Load media ID into map\n");
++	fprintf(stderr, "\nLibrary simulation commands (fault injection):\n");
++	fprintf(stderr, "   fault move <key> <asc> <ascq> [any|load|unload]\n"
++					"                -> MOVE MEDIUM / INITIALIZE ELEMENT STATUS fail with this sense (hex)\n");
++	fprintf(stderr, "   fault clear  -> Remove injected faults\n");
++	fprintf(stderr, "   fault status -> Show injected faults, door and pending attention\n");
++	fprintf(stderr, "   door open [notready] -> Robot motion returns NOT READY 04h/03h\n");
++	fprintf(stderr, "   door close [noclear] [becoming <sec>]\n"
++					"                -> Next command gets UNIT ATTENTION 28h/00h; clears faults unless noclear\n");
+ }
+ 
+ /* check if media (tape) exists in directory (/opt/mhvtl/..) */
+@@ -256,6 +264,42 @@ void Check_Close(int argc, char **argv) {
+ 	PrintErrorExit(argv[0], "close map");
+ }
+ 
++void Check_Fault(int argc, char **argv) {
++	if (argc == 4 && (!strcmp(argv[3], "clear") || !strcmp(argv[3], "status")))
++		return;
++	if ((argc == 7 || argc == 8) && !strcmp(argv[3], "move") &&
++		ishex(argv[4]) && ishex(argv[5]) && ishex(argv[6])) {
++		if (argc == 7 || !strcmp(argv[7], "any") ||
++			!strcmp(argv[7], "load") || !strcmp(argv[7], "unload"))
++			return;
++	}
++	PrintErrorExit(argv[0], "fault move <key> <asc> <ascq> [any|load|unload] | fault clear | fault status");
++}
++
++void Check_Door(int argc, char **argv) {
++	int i;
++
++	if (argc < 4)
++		PrintErrorExit(argv[0], "door open|close");
++	if (!strcmp(argv[3], "open")) {
++		if (argc == 4 || (argc == 5 && !strcmp(argv[4], "notready")))
++			return;
++	} else if (!strcmp(argv[3], "close")) {
++		for (i = 4; i < argc; i++) {
++			if (!strcmp(argv[i], "noclear"))
++				continue;
++			if (!strcmp(argv[i], "becoming") && i + 1 < argc &&
++				isnumeric(argv[i + 1])) {
++				i++;
++				continue;
++			}
++			PrintErrorExit(argv[0], "door close [noclear] [becoming <sec>]");
++		}
++		return;
++	}
++	PrintErrorExit(argv[0], "door open [notready] | door close [noclear] [becoming <sec>]");
++}
++
+ void Check_Params(int argc, char **argv) {
+ 	if (argc > 1) {
+ 		if (!isnumeric(argv[1])) {
+@@ -346,6 +390,14 @@ void Check_Params(int argc, char **argv) {
+ 				Check_Close(argc, argv);
+ 				return;
+ 			}
++			if (!strcmp(argv[2], "fault")) {
++				Check_Fault(argc, argv);
++				return;
++			}
++			if (!strcmp(argv[2], "door")) {
++				Check_Door(argc, argv);
++				return;
++			}
+ 			PrintErrorExit(argv[0], "check param");
+ 		}
+ 		PrintErrorExit(argv[0], "");
+@@ -409,7 +461,7 @@ int main(int argc, char **argv) {
+ 	if (get_config(device_conf, DEVICE_CONF, my_id) < 0)
+ 		exit(1);
+ 
+-	if ((argc < 2) || (argc > 6)) {
++	if ((argc < 2) || (argc > 8)) {
+ 		usage(argv[0]);
+ 		exit(1);
+ 	}
+@@ -502,6 +554,8 @@ int main(int argc, char **argv) {
+ 		} else if (!strncmp(buf, "exit", 4)) {
+ 		} else if (!strncmp(buf, "TapeAlert", 9)) {
+ 		} else if (!strncmp(buf, "InquiryDataChange", 17)) {
++		} else if (!strncmp(buf, "fault ", 6)) {
++		} else if (!strncmp(buf, "door ", 5)) {
+ 		} else {
+ 			fprintf(stderr, "Command for library not allowed\n");
+ 			exit(1);
+@@ -566,6 +620,8 @@ int main(int argc, char **argv) {
+ 			DisplayResponse(ReceiverQid, "Contents: ");
+ 		if (!strcmp(argv[2], "load") && !strcmp(argv[3], "map"))
+ 			DisplayResponse(ReceiverQid, "");
++		if (!strcmp(argv[2], "fault") || !strcmp(argv[2], "door"))
++			DisplayResponse(ReceiverQid, "");
+ 	}
+ 
+ 	exit(0);
+diff --git a/usr/cmd/vtllibrary.c b/usr/cmd/vtllibrary.c
+index 02eb3d7..9749012 100644
+--- a/usr/cmd/vtllibrary.c
++++ b/usr/cmd/vtllibrary.c
+@@ -49,6 +49,7 @@
+ #include <ctype.h>
+ #include <inttypes.h>
+ #include <signal.h>
++#include <time.h>
+ #include "vtl_common.h"
+ #include "mhvtl_scsi.h"
+ #include "mhvtl_list.h"
+@@ -75,6 +76,182 @@ static long	   backoff;		   /* Backoff value for polling char device */
+ 
+ static struct smc_priv smc_slots;
+ 
++/*
++ * Simulation-only fault injection for the medium changer (fc-switch-sim).
++ * Generic test hooks, controlled from vtlcmd:
++ *   fault move <key> <asc> <ascq> [any|load|unload]   (hex values)
++ *   fault clear
++ *   fault status
++ *   door open [notready]        robot motion -> NOT READY 04h/03h
++ *                               notready: TUR / READ ELEMENT STATUS too
++ *   door close [noclear] [becoming <sec>]
++ *                               queue one UNIT ATTENTION 28h/00h for the
++ *                               next command; clears faults unless noclear;
++ *                               optional NOT READY 04h/01h for <sec> seconds
++ * Commands with a vendor-specific bit (bit 6/7) set in the CDB CONTROL byte
++ * (not applicable to MOVE / EXCHANGE MEDIUM, where byte 11 has other uses)
++ * skip the door checks and neither see nor consume the 28h/00h attention;
++ * the bits are cleared before the command is processed.
++ */
++#define SIM_DIR_ANY	   0
++#define SIM_DIR_LOAD   1
++#define SIM_DIR_UNLOAD 2
++static struct {
++	int		 move_fault;
++	uint8_t	 key, asc, ascq;
++	int		 direction;
++	int		 door_open;
++	int		 door_notready_all;
++	int		 ua_pending;
++	time_t	 becoming_until;
++} sim;
++
++static const char *sim_dir_name(int d) {
++	return d == SIM_DIR_LOAD ? "load" : d == SIM_DIR_UNLOAD ? "unload" : "any";
++}
++
++static int sim_is_drive(int addr) {
++	return addr >= (int)smc_slots.pm->start_drive &&
++		   addr < (int)smc_slots.pm->start_drive + smc_slots.num_drives;
++}
++
++/*
++ * Returns non-zero if a vendor-specific bit is set in the CONTROL byte, and
++ * clears it (the bit is only a marker for this simulation; the regular
++ * command handlers reject non-zero reserved/control bits).
++ */
++static int sim_take_vendor_bits(uint8_t *cdb) {
++	int ctl, set;
++
++	switch (cdb[0] >> 5) {
++	case 0: ctl = 5; break;
++	case 1:
++	case 2: ctl = 9; break;
++	case 4: ctl = 15; break;
++	case 5: ctl = 11; break;
++	default: return 0;
++	}
++	if (cdb[0] == MOVE_MEDIUM || cdb[0] == EXCHANGE_MEDIUM)
++		return 0;
++	set = (cdb[ctl] & 0xc0) != 0;
++	cdb[ctl] &= ~0xc0;
++	return set;
++}
++
++static int sim_is_robot_motion(uint8_t op) {
++	return op == MOVE_MEDIUM || op == EXCHANGE_MEDIUM ||
++		   op == INITIALIZE_ELEMENT_STATUS ||
++		   op == INITIALIZE_ELEMENT_STATUS_WITH_RANGE;
++}
++
++static void sim_status(struct q_msg *msg) {
++	char buf[MAXOBN];
++	long left = sim.becoming_until - time(NULL);
++
++	snprintf(buf, sizeof(buf),
++			 "fault=%d key=%02x asc=%02x ascq=%02x direction=%s "
++			 "door=%s door_notready=%d ua_pending=%d becoming_ready=%ld",
++			 sim.move_fault, sim.key, sim.asc, sim.ascq,
++			 sim_dir_name(sim.direction),
++			 sim.door_open ? "open" : "closed", sim.door_notready_all,
++			 sim.ua_pending, left > 0 ? left : 0);
++	send_msg(buf, msg->snd_id);
++}
++
++static void sim_message(struct q_msg *msg) {
++	unsigned int key, asc, ascq;
++	char		 dir[16] = "any";
++	char		*t = msg->text;
++	int			 n;
++
++	if (!strncmp(t, "fault move ", 11)) {
++		n = sscanf(t + 11, "%x %x %x %15s", &key, &asc, &ascq, dir);
++		if (n < 3 || key > 0xf || asc > 0xff || ascq > 0xff ||
++			(strcmp(dir, "any") && strcmp(dir, "load") && strcmp(dir, "unload"))) {
++			send_msg("ERROR bad fault move arguments", msg->snd_id);
++			return;
++		}
++		sim.move_fault = 1;
++		sim.key		   = key;
++		sim.asc		   = asc;
++		sim.ascq	   = ascq;
++		sim.direction  = !strcmp(dir, "load")	  ? SIM_DIR_LOAD
++						 : !strcmp(dir, "unload") ? SIM_DIR_UNLOAD
++												  : SIM_DIR_ANY;
++		MHVTL_LOG("sim: MOVE MEDIUM fault %02x/%02x/%02x %s",
++				  key, asc, ascq, dir);
++		send_msg("OK", msg->snd_id);
++	} else if (!strncmp(t, "fault clear", 11)) {
++		sim.move_fault = 0;
++		sim.key = sim.asc = sim.ascq = 0;
++		sim.direction				 = SIM_DIR_ANY;
++		MHVTL_LOG("sim: faults cleared");
++		send_msg("OK", msg->snd_id);
++	} else if (!strncmp(t, "fault status", 12)) {
++		sim_status(msg);
++	} else if (!strncmp(t, "door open", 9)) {
++		sim.door_open		  = 1;
++		sim.door_notready_all = strstr(t, "notready") != NULL;
++		sim.becoming_until	  = 0;
++		MHVTL_LOG("sim: door open%s", sim.door_notready_all ? " (notready)" : "");
++		send_msg("OK", msg->snd_id);
++	} else if (!strncmp(t, "door close", 10)) {
++		char *b = strstr(t, "becoming ");
++
++		sim.door_open		  = 0;
++		sim.door_notready_all = 0;
++		sim.ua_pending		  = 1;
++		sim.becoming_until	  = b ? time(NULL) + atoi(b + 9) : 0;
++		if (!strstr(t, "noclear")) {
++			sim.move_fault = 0;
++			sim.key = sim.asc = sim.ascq = 0;
++			sim.direction				 = SIM_DIR_ANY;
++		}
++		MHVTL_LOG("sim: door closed");
++		send_msg("OK", msg->snd_id);
++	}
++}
++
++/* Returns non-zero if the command was answered with sense data */
++static int sim_check(uint8_t *cdb, uint8_t *sam_stat) {
++	int bypass = sim_take_vendor_bits(cdb);
++
++	if (!bypass && sim.becoming_until) {
++		if (time(NULL) < sim.becoming_until) {
++			sam_not_ready(E_BECOMING_READY, sam_stat);
++			return 1;
++		}
++		sim.becoming_until = 0;
++	}
++	if (!bypass && sim.ua_pending) {
++		sim.ua_pending = 0;
++		sam_unit_attention(E_NOT_READY_TO_TRANSITION, sam_stat);
++		return 1;
++	}
++	if (sim.door_open) {
++		if (sim_is_robot_motion(cdb[0]) ||
++			(!bypass && sim.door_notready_all &&
++			 (cdb[0] == TEST_UNIT_READY || cdb[0] == READ_ELEMENT_STATUS))) {
++			sam_not_ready(E_MANUAL_INTERVENTION_REQ, sam_stat);
++			return 1;
++		}
++	}
++	if (sim.move_fault && sim_is_robot_motion(cdb[0])) {
++		if (cdb[0] == MOVE_MEDIUM && sim.direction != SIM_DIR_ANY) {
++			int src_drive = sim_is_drive(get_unaligned_be16(&cdb[4]));
++			int dst_drive = sim_is_drive(get_unaligned_be16(&cdb[6]));
++
++			if (sim.direction == SIM_DIR_LOAD && !dst_drive)
++				return 0;
++			if (sim.direction == SIM_DIR_UNLOAD && !src_drive)
++				return 0;
++		}
++		sam_sense(sim.key, (sim.asc << 8) | sim.ascq, sam_stat);
++		return 1;
++	}
++	return 0;
++}
++
+ struct s_info *add_new_slot(struct lu_phy_attr *lu);
+ 
+ static void usage(char *progname) {
+@@ -202,6 +379,8 @@ static void processCommand(int cdev, uint8_t *cdb, struct mhvtl_ds *dbuf_p,
+ 		}
+ 		if (check_reset(&dbuf_p->sam_stat))
+ 			return;
++		if (sim_check(cdb, &dbuf_p->sam_stat))
++			return;
+ 	}
+ 
+ 	/* Skip main op code processing if pre-cmd returns non-zero */
+@@ -525,6 +704,8 @@ static int processMessageQ(struct q_msg *msg) {
+ 		list_map(msg);
+ 	if (!strncmp(msg->text, "load map ", 9))
+ 		load_map(msg);
++	if (!strncmp(msg->text, "fault ", 6) || !strncmp(msg->text, "door ", 5))
++		sim_message(msg);
+ 	if (!strncmp(msg->text, "InquiryDataChange", 17))
+ 		set_inquiry_data_changed();
+ 	if (!strncmp(msg->text, "offline", 7)) {
+diff --git a/usr/vtllib.c b/usr/vtllib.c
+index f362ef3..97c2048 100644
+--- a/usr/vtllib.c
++++ b/usr/vtllib.c
+@@ -492,6 +492,12 @@ void sam_hardware_error(uint16_t ascq, uint8_t *sam_stat) {
+ 	MHVTL_DBG(1, "");
+ }
+ 
++/* Arbitrary sense key (used by simulation fault injection) */
++void sam_sense(uint8_t key, uint16_t ascq, uint8_t *sam_stat) {
++	return_sense(key, ascq, NULL, sam_stat);
++	MHVTL_DBG(1, "");
++}
++
+ void sam_no_sense(uint8_t key, uint16_t ascq, uint8_t *sam_stat) {
+ 	return_sense(NO_SENSE | key, ascq, NULL, sam_stat);
+ 	MHVTL_DBG(1, "");
+-- 
+2.43.0
+

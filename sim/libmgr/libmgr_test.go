@@ -71,12 +71,13 @@ func TestParse(t *testing.T) {
 	}
 }
 
-// fakeLib は mhVTL の代わり。
+// fakeLib は mhVTL の代わり。mtx は見本の mtx status（READ ELEMENT STATUS の返り値はここから作る）。
 type fakeLib struct {
-	mtx     string
-	online  bool
-	calls   []string
-	notices []Event
+	mtx       string
+	online    bool
+	calls     []string
+	notices   []Event
+	simStatus string
 }
 
 func (f *fakeLib) run(name string, args ...string) (string, error) {
@@ -90,10 +91,22 @@ func (f *fakeLib) run(name string, args ...string) (string, error) {
 		if !f.online {
 			return "", errFake
 		}
+		for i, a := range args {
+			if a == "-o" {
+				e, err := ParseMtxStatus(f.mtx)
+				if err != nil {
+					return "", err
+				}
+				return "", os.WriteFile(args[i+1], buildRES(e), 0o600)
+			}
+		}
 		return "", nil
 	case "mtx":
 		return f.mtx, nil
 	case "vtlcmd":
+		if len(args) >= 3 && args[1] == "fault" && args[2] == "status" {
+			return f.simStatus, nil
+		}
 		return "OK", nil
 	}
 	return "", nil

@@ -82,7 +82,7 @@ func ParseDeviceConf(text string, libID int) (DeviceConf, error) {
 	return dc, nil
 }
 
-// Elements は mtx status から読んだ要素。
+// Elements はロボットから読んだ要素（番号の振り方は mtx status と同じ）。
 type Elements struct {
 	Drives map[int]ElemDrive // Data Transfer Element の番号 → 中身
 	Slots  []Slot
@@ -99,7 +99,7 @@ var (
 	reSlot = regexp.MustCompile(`^Storage Element (\d+)( IMPORT/EXPORT)?:(Full|Empty)(?:\s*:VolumeTag=(\S+))?`)
 )
 
-// ParseMtxStatus は `mtx -f <sg> status` の出力を読む。
+// ParseMtxStatus は `mtx -f <sg> status` の出力を読む（いまの見回りは ParseElementStatus を使う。試験で突き合わせる）。
 func ParseMtxStatus(text string) (Elements, error) {
 	e := Elements{Drives: map[int]ElemDrive{}}
 	sc := bufio.NewScanner(strings.NewReader(text))
@@ -160,7 +160,8 @@ func findRobot(run Runner, serial string) (string, error) {
 }
 
 // testUnitReady はロボットが命令を受けられるか（vtlcmd offline だと通らない）。
+// CONTROL バイトに見回りのビットを立てる（扉を閉じたあとの UNIT ATTENTION をサーバより先に受け取らない）。
 func testUnitReady(run Runner, sg string) bool {
-	_, err := run("sg_raw", sg, "00", "00", "00", "00", "00", "00")
+	_, err := run("sg_raw", sg, "00", "00", "00", "00", "00", fmt.Sprintf("%02x", pollVendorBit))
 	return err == nil
 }

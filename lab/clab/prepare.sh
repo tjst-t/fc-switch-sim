@@ -8,7 +8,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(cd ../.. && pwd)
 CACHE=$ROOT/.cache
-BASE=$CACHE/fcsim-base.qcow2
+# FCSIM_BASE=<パス> で共通イメージを替えられる（VM のディスクはこの差分になる）
+BASE=$(realpath -m "${FCSIM_BASE:-$CACHE/fcsim-base.qcow2}")
 [ -f "$BASE" ] || { echo "$BASE が無い。先に lab/images/build-base.sh" >&2; exit 1; }
 if [ "${REBUILD:-1}" = 1 ]; then
   sudo docker build -q -f "$ROOT/image/Dockerfile" -t fc-switch-sim/fcsw:dev "$ROOT" >/dev/null
