@@ -279,7 +279,7 @@
       "number": 11,
       "kind": "task",
       "title": "F4 docs：データ網の MTU が containerlab の既定（9500）に頼っていることを書く",
-      "status": "in-progress",
+      "status": "done",
       "parent": "f1-f5",
       "dependsOn": [],
       "milestone": null,
@@ -287,7 +287,7 @@
       "labels": [],
       "body": "FCoE はフル長のフレーム（約 2.2KB）を通すため、経路の MTU が 1500 ではログインできない（試作で確認）。containerlab の veth の既定 MTU 9500 と、qemu-bmc の VM_NET_MTU に頼っていることを、外部のトポロジ向けの docs に書く。",
       "doneWhen": "docs に、要る MTU・どこで決まっているか・外部のトポロジで気をつけることが書いてある。",
-      "resolution": null,
+      "resolution": "19ad428。docs/external-topology.md の「データ網の MTU」。",
       "refs": [],
       "threads": [
         {
@@ -296,8 +296,8 @@
         }
       ],
       "createdAt": "2026-10-27T08:15:42.103Z",
-      "updatedAt": "2026-10-27T08:15:42.103Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:46:34.354Z",
+      "closedAt": "2026-10-27T08:46:34.354Z",
       "extra": {}
     },
     {
