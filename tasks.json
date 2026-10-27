@@ -378,6 +378,97 @@
       "updatedAt": "2026-10-27T12:25:26.419Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "a-fw-rest-api-v1-library-drives-firmware",
+      "number": 15,
+      "kind": "task",
+      "title": "(a) FW の版を返す：REST（/api/v1 の library・drives に firmware）と SNMP（MIB に項目を足す）",
+      "status": "ready",
+      "parent": "fw-fw-libmgr",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "ストーリー #14 に従う。ライブラリとドライブの FW の版を、REST の /api/v1/library・/api/v1/drives の項目と、MIB（docs/FCSIM-TAPE-LIBRARY-MIB.txt）の新しい項目で返す。mhVTL の INQUIRY の Product Revision Level と同じ値にする（揃え方はストーリーの「決めること」）。既存の OID と REST の項目は変えない。",
+      "doneWhen": "単体の試験で、REST と SNMP の版が device.conf（または決めた持ち場所）の値と一致する。サーバから見た INQUIRY の Product Revision Level とも一致する。既存の項目が変わっていない。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "b-fw-rest",
+      "number": 16,
+      "kind": "task",
+      "title": "(b) FW 更新の口と状態：REST で版を指定して更新、所要時間のあいだ使えない、終わると版が上がり再起動のあとも残る",
+      "status": "ready",
+      "parent": "fw-fw-libmgr",
+      "dependsOn": [
+        "a-fw-rest-api-v1-library-drives-firmware"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "ストーリー #14 に従う。REST で版を指定して更新を始め、進み具合と結果を状態として読めるようにする。更新中は、設定できる所要時間のあいだ装置が使えない（見せ方はストーリーで決める）。終わると版が上がり、libmgr・mhVTL・VM を起こし直しても新しい版が見える。更新の口を使わないときの動きは変えない。",
+      "doneWhen": "単体の試験で、状態の移り変わり（idle→updating→done）と版の更新が確かめられる。起こし直したあとも新しい版が残る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "c-fw-sim-v1",
+      "number": 17,
+      "kind": "task",
+      "title": "(c) FW 更新の失敗の注入：/_sim/v1 に、途中で失敗・版が上がらない・時間切れ",
+      "status": "ready",
+      "parent": "fw-fw-libmgr",
+      "dependsOn": [
+        "b-fw-rest"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "ストーリー #14 に従う。/_sim/v1 に、次の更新をわざと失敗させる口を足す（途中で失敗、終わっても版が上がらない、時間切れ）。/api/v1・SNMP には出さない。",
+      "doneWhen": "単体の試験で、3 つの失敗がそれぞれ状態と版に出る。注入を消すと、ふつうの更新に戻る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "closedAt": null,
+      "extra": {}
+    },
+    {
+      "id": "d-fw-e2e-e2e",
+      "number": 18,
+      "kind": "task",
+      "title": "(d) 試験：FW 更新の e2e と、既存の e2e",
+      "status": "ready",
+      "parent": "fw-fw-libmgr",
+      "dependsOn": [
+        "b-fw-rest",
+        "c-fw-sim-v1"
+      ],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "ストーリー #14 に従う。新しい e2e で、版の読み出し → 更新 → 使えない間の応答 → 新しい版（再起動のあとも）と、失敗の注入を確かめる。最後に版と注入を元に戻す。既存の e2e を流し直す。",
+      "doneWhen": "新しい e2e が全部 OK。e2e-ha・e2e-sim-faults・e2e-libmgr・e2e-zabbix も全部 OK。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
