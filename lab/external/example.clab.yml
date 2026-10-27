@@ -1,0 +1,61 @@
+# 外部のトポロジから fc-switch-sim の部品（FC スイッチ fcsw・サーバ VM・テープライブラリ VM）を使う例。
+# lab/clab の構成とは名前・MAC・管理網を変えてある。作り方は make-example.sh、約束事は docs/external-topology.md。
+#   tapehost（qemu-bmc の VM）eth1 ──── eth1 fab-x（fcsw）eth2 ──── eth1 tapelib（qemu-bmc の VM、mhVTL）
+# __SEEDS__（種とディスクの置き場）と __BASE_DIR__（共通イメージのあるディレクトリ）は make-example.sh が埋める。
+name: fcsim-ext
+
+mgmt:
+  network: fcsim-ext-mgmt
+  ipv4-subnet: 172.30.32.0/24
+
+topology:
+  kinds:
+    linux:
+      image: ghcr.io/tjst-t/qemu-bmc:0.9
+  nodes:
+    fab-x:
+      kind: linux
+      image: fc-switch-sim/fcsw:dev
+      mgmt-ipv4: 172.30.32.10
+      binds:
+        - switch.yaml:/etc/fcsw/switch.yaml:ro
+
+    tapehost:
+      kind: linux
+      mgmt-ipv4: 172.30.32.21
+      devices: [/dev/net/tun, /dev/kvm]
+      binds:
+        - __SEEDS__/tapehost:/vm            # seed.iso と disk.qcow2（qemu-bmc は /vm/disk.qcow2 から起動する）
+        - __BASE_DIR__:__BASE_DIR__:ro      # disk.qcow2 の元の共通イメージ（差分のディスクは絶対パスで指す）
+      env:
+        VM_MEMORY: "4096"
+        VM_CPUS: "2"
+        VM_BOOT_MODE: bios
+        VM_CDROM: /vm/seed.iso
+        VM_NETWORKS: eth1
+        VM_NET_MTU: "9500"                 # FCoE のフレームを通す（docs/external-topology.md の MTU）
+        VM_MACS: "52:54:00:fc:0a:01"       # prepare.sh seed -f と同じにする
+        POWER_ON_AT_START: "true"
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22"
+
+    tapelib:
+      kind: linux
+      mgmt-ipv4: 172.30.32.22
+      devices: [/dev/net/tun, /dev/kvm]
+      binds:
+        - __SEEDS__/tapelib:/vm
+        - __BASE_DIR__:__BASE_DIR__:ro
+      env:
+        VM_MEMORY: "4096"
+        VM_CPUS: "2"
+        VM_BOOT_MODE: bios
+        VM_CDROM: /vm/seed.iso
+        VM_NETWORKS: eth1
+        VM_NET_MTU: "9500"
+        VM_MACS: "52:54:00:fc:0a:02"
+        POWER_ON_AT_START: "true"
+        QEMU_EXTRA_ARGS: "-nic user,model=virtio-net-pci,mac=52:54:00:aa:00:01,hostfwd=tcp::22-:22,hostfwd=tcp::8080-:8080,hostfwd=udp::161-:161"
+
+  links:
+    - endpoints: ["tapehost:eth1", "fab-x:eth1"]
+    - endpoints: ["tapelib:eth1", "fab-x:eth2"]

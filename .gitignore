@@ -7,3 +7,6 @@
 /lab/clab/run-ha/
 /lab/clab/run-ha.clab.yml
 __pycache__/
+/lab/external/run/
+/lab/external/run.clab.yml
+/lab/external/clab-*/

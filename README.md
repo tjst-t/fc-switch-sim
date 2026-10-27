@@ -296,6 +296,12 @@ curl -X POST localhost:8080/api/v1/ports/1/disable
 - スイッチの再起動（状態を失う）の模擬。
 - ベンダーの CLI・API・MIB の皮（スイッチとライブラリ）。
 
+## 外部のトポロジから使う
+
+FC スイッチ（fcsw）・サーバの VM・テープライブラリの VM を、自分の containerlab のトポロジの部品として使える。
+`lab/clab/prepare.sh seed` で、VM 1 台ぶんの種とディスクを、置き場・ノード名・MAC・管理アドレスを指定して作る。
+コンテナへの bind、データ網の MTU（containerlab の既定 9500 に頼っている）、版の固定は `docs/external-topology.md`。動く例は `lab/external/`。
+
 ## ライセンス
 
 - このリポジトリは Apache License 2.0（直下の `LICENSE`）。

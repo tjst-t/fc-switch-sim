@@ -1,0 +1,17 @@
+# 外部のトポロジの例（example.clab.yml）の FC スイッチ。ポート 0（eth1）がサーバ、ポート 1（eth2）がライブラリ。
+# WWPN は 20:00:<FC の NIC の MAC>（VM の中の fcoe-utils がそう決める）。
+name: fab-x
+switchWWN: "10:00:00:05:1e:fc:0a:00"
+domainID: 1
+fkaPeriodMs: 8000
+ports:
+  - interface: eth1
+  - interface: eth2
+zoning:
+  defaultZone: noaccess
+  aliases:
+    tapehost: ["20:00:52:54:00:fc:0a:01"]
+    tapelib: ["20:00:52:54:00:fc:0a:02"]
+  zones:
+    - name: z_tapehost_tapelib
+      members: [tapehost, tapelib]

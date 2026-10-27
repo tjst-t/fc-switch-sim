@@ -41,7 +41,7 @@ packages:
   - snmp
 runcmd:
   - [sh, -c, 'apt-get install -y linux-headers-$(uname -r) > /var/log/fcsim-headers.log 2>&1 || true']
-  # mhVTL：リリース版に固定（master は 2026-10-21 にリンクに失敗した）。
+  # mhVTL：リリース 1.8-0_release の commit に固定（master は 2026-10-21 にリンクに失敗した）。
   # SG の数を 1024 に（既定の 128 では LIO pscsi が 1MB 以上のブロックを組めない）。
   # LTO-10 は 1.8-0_release に無いので、master のコミット 1cd21f7 を cherry-pick したパッチを当てる
   # （パッチ本体は write_files で埋め込み、VM の中ではこのリポジトリを clone しない）。
@@ -49,10 +49,13 @@ runcmd:
   # 0003 はチェンジャーの試験用の障害注入（vtlcmd の fault・door。patches/README.md）。
   # make install は restorecon（SELinux）を呼ぶので、何もしないものを置く。
   - [sh, -c, 'printf "#!/bin/sh\nexit 0\n" > /usr/local/sbin/restorecon && chmod +x /usr/local/sbin/restorecon']
-  - [sh, -c, 'cd /usr/local/src && git clone -q --depth 1 --branch 1.8-0_release https://github.com/markh794/mhvtl.git > /var/log/fcsim-mhvtl.log 2>&1']
-  - [sh, -c, 'cd /usr/local/src/mhvtl && git apply /usr/local/src/patches/0001-mhvtl-lto10-support.patch /usr/local/src/patches/0002-drives-1-2-use-lto10.patch /usr/local/src/patches/0003-changer-sim-fault-injection.patch >> /var/log/fcsim-mhvtl.log 2>&1']
+  - [sh, -c, 'mkdir -p /usr/local/src/mhvtl && cd /usr/local/src/mhvtl && git init -q && git fetch -q --depth 1 https://github.com/markh794/mhvtl.git 469d79dc5b518d9eead9a18e6d3272b89350118e > /var/log/fcsim-mhvtl.log 2>&1 && git checkout -q FETCH_HEAD || echo "mhVTL 469d79dc5b518d9eead9a18e6d3272b89350118e を取れない" >> /var/log/fcsim-build-errors']
+  - [sh, -c, 'cd /usr/local/src/mhvtl && git apply /usr/local/src/patches/0001-mhvtl-lto10-support.patch /usr/local/src/patches/0002-drives-1-2-use-lto10.patch /usr/local/src/patches/0003-changer-sim-fault-injection.patch >> /var/log/fcsim-mhvtl.log 2>&1 || echo "パッチが当たらない" >> /var/log/fcsim-build-errors']
   - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && sed -i "s/^#define SCSI_MAX_SG_CHAIN_SEGMENTS SG_ALL/#define SCSI_MAX_SG_CHAIN_SEGMENTS 1024/" mhvtl.c']
-  - [sh, -c, 'cd /usr/local/src/mhvtl && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
-  - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1']
-  - [sh, -c, 'echo done > /var/log/fcsim-build-done']
+  - [sh, -c, 'cd /usr/local/src/mhvtl && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1 || echo "mhVTL の build に失敗" >> /var/log/fcsim-build-errors']
+  - [sh, -c, 'cd /usr/local/src/mhvtl/kernel && make >> /var/log/fcsim-mhvtl.log 2>&1 && make install >> /var/log/fcsim-mhvtl.log 2>&1 || echo "mhVTL のカーネルモジュールの build に失敗" >> /var/log/fcsim-build-errors']
+  # 終わりの印：要るものが揃っているかを確かめ、シリアルコンソールに FCSIM-BUILD-RESULT=OK か FAIL を出す（build-base.sh が見る）
+  - [sh, -c, 'for p in fcoe-utils targetcli-fb sg3-utils lsscsi mtx mt-st snmpd; do dpkg -s $p >/dev/null 2>&1 || echo "パッケージ $p が無い" >> /var/log/fcsim-build-errors; done']
+  - [sh, -c, 'for c in vtlcmd vtllibrary vtltape mktape; do command -v $c >/dev/null || echo "$c が無い" >> /var/log/fcsim-build-errors; done; ls /lib/modules/*/*/mhvtl.ko* >/dev/null 2>&1 || find /lib/modules -name "mhvtl.ko*" | grep -q . || echo "mhvtl.ko が無い" >> /var/log/fcsim-build-errors']
+  - [sh, -c, 'if [ -s /var/log/fcsim-build-errors ]; then sed "s/^/FCSIM-BUILD-ERROR: /" /var/log/fcsim-build-errors > /dev/ttyS0; printf "\nFCSIM-BUILD-RESULT=FAIL\n" > /dev/ttyS0; else echo done > /var/log/fcsim-build-done; printf "\nFCSIM-BUILD-RESULT=OK\n" > /dev/ttyS0; fi']
   - [poweroff]
