@@ -295,3 +295,9 @@ curl -X POST localhost:8080/api/v1/ports/1/disable
 
 - スイッチの再起動（状態を失う）の模擬。
 - ベンダーの CLI・API・MIB の皮（スイッチとライブラリ）。
+
+## ライセンス
+
+- このリポジトリは Apache License 2.0（直下の `LICENSE`）。
+- ただし `lab/images/base/patches/` の mhVTL へのパッチは、upstream の mhVTL と同じ GPL-2.0。upstream から取ったもの（0001）も、
+  このリポジトリで書いたもの（0002 以降）も mhVTL への変更なので GPL-2.0 とする。詳しくはそのディレクトリの `README.md`。
