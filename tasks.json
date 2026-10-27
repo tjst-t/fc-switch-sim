@@ -253,7 +253,7 @@
       "number": 10,
       "kind": "task",
       "title": "F3 prepare.sh：libmgr をホストの Go に頼らず build する（要らない構成では飛ばす）",
-      "status": "in-progress",
+      "status": "done",
       "parent": "f1-f5",
       "dependsOn": [],
       "milestone": null,
@@ -261,7 +261,7 @@
       "labels": [],
       "body": "いまは single のときもホストの /usr/local/go で libmgr を build する。libmgr を使う構成（ha・ライブラリの種）でだけ build し、ホストに Go が無ければ Docker の golang イメージの中で build する。",
       "doneWhen": "prepare.sh single が Go も libmgr の build も要らずに通る。ha ではホストの Go が無くてもコンテナで build できる。",
-      "resolution": null,
+      "resolution": "19ad428。libmgr は -L のある種・ha のライブラリだけで build。Go が無ければ golang（digest 固定）のコンテナで。FCSIM_LIBMGR_BUILD=docker で確認。",
       "refs": [],
       "threads": [
         {
@@ -270,8 +270,8 @@
         }
       ],
       "createdAt": "2026-10-27T08:15:34.503Z",
-      "updatedAt": "2026-10-27T08:15:34.503Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:46:29.313Z",
+      "closedAt": "2026-10-27T08:46:29.313Z",
       "extra": {}
     },
     {
