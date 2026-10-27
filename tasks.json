@@ -95,7 +95,7 @@
       "milestone": null,
       "priority": "normal",
       "labels": [],
-      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクが広がったとメタ Project から知らせが来るまで着手しない。\n\n- sim/libmgr の api.go・manager.go に次を足し、vtlcmd の新しい命令を呼ぶ。\n  - PUT と DELETE /_sim/v1/faults/move-medium {key, asc, ascq[, direction]}\n  - POST /_sim/v1/door/open\n  - POST /_sim/v1/door/close {clearFaults: 既定 true}\n  - GET /_sim/v1/state（障害・扉・UA の残りを mhVTL の fault status から返す）\n- /api/v1・SNMP・トラップには出さない。\n- 起動のときに入れ直す仕組みは作らない（VM を起こし直したら、deeparchive-sim が state を見て入れ直す）。",
+      "body": "親のストーリー #2 の決まりに従う。着手の条件：ホストのディスクに空きができてから。\n\n- sim/libmgr の api.go・manager.go に次を足し、vtlcmd の新しい命令を呼ぶ。\n  - PUT と DELETE /_sim/v1/faults/move-medium {key, asc, ascq[, direction]}\n  - POST /_sim/v1/door/open\n  - POST /_sim/v1/door/close {clearFaults: 既定 true}\n  - GET /_sim/v1/state（障害・扉・UA の残りを mhVTL の fault status から返す）\n- /api/v1・SNMP・トラップには出さない。\n- 起動のときに入れ直す仕組みは作らない（VM を起こし直したら、呼ぶ側が state を見て入れ直す）。",
       "doneWhen": "単体の試験（Runner を偽物にして、vtlcmd に渡す引数と state の JSON を確かめる）が通る。/api/v1 と SNMP の出力が変わらない。",
       "resolution": "506f393。sim/libmgr/sim.go。単体の試験 TestSimAPI（vtlcmd の引数・state の JSON・400 の検査・/api/v1 の形）が通る。",
       "refs": [],
@@ -106,7 +106,7 @@
         }
       ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-27T08:12:33.074Z",
+      "updatedAt": "2026-10-27T09:31:05.944Z",
       "closedAt": "2026-10-27T08:12:33.074Z",
       "extra": {}
     },
