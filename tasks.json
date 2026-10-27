@@ -227,7 +227,7 @@
       "number": 9,
       "kind": "task",
       "title": "F2 版の固定：Debian のクラウドイメージ（日付の版＋SHA512）・mhVTL（commit）・Dockerfile のベースイメージ（digest）",
-      "status": "in-progress",
+      "status": "done",
       "parent": "f1-f5",
       "dependsOn": [],
       "milestone": null,
@@ -235,7 +235,7 @@
       "labels": [],
       "body": "再現性のため。Debian 13 のクラウドイメージは trixie/latest ではなく日付の入った版の URL と SHA512 で確かめる。mhVTL は --branch 1.8-0_release ではなく commit 469d79d を取って checkout。image/Dockerfile（と image/mon/Dockerfile）の FROM を digest で固定。",
       "doneWhen": "build-base.sh が日付の版を落として SHA512 を確かめ（違えば非0）、VM の中で mhVTL が 469d79d になる。Dockerfile の FROM が digest 付きで build できる。",
-      "resolution": null,
+      "resolution": "19ad428。Debian 20261021-2638＋SHA512（いままでの latest と同じもの）、mhVTL 469d79d（VM の中で確認）、Dockerfile の FROM を digest で。",
       "refs": [],
       "threads": [
         {
@@ -244,8 +244,8 @@
         }
       ],
       "createdAt": "2026-10-27T08:15:28.668Z",
-      "updatedAt": "2026-10-27T08:15:28.668Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T08:46:23.756Z",
+      "closedAt": "2026-10-27T08:46:23.756Z",
       "extra": {}
     },
     {
