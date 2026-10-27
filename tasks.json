@@ -331,7 +331,7 @@
       "number": 13,
       "kind": "bug",
       "title": "障害訓練 srv1-reboot が再起動を起こさずに通っていた・電源断からの戻りの時間の記載が実測と違う",
-      "status": "in-progress",
+      "status": "done",
       "parent": null,
       "dependsOn": [],
       "milestone": null,
@@ -341,7 +341,7 @@
       ],
       "body": "## 分かったこと\n- tools/drill.sh の inject と recover に srv1-reboot の枝が2つずつあり、bash の case は最初に合った枝だけを流すため、先の枝（ログインし直しの確かめ）だけが走り、Redfish の ForceRestart の枝は流れていなかった。確かめは前の訓練のログアウトの記録で 0 秒で成り立っていた。\n- docs/failure-drills.md の lib1-poweroff の「起動して FC の設定まで約 20 秒」は、実測（約 40〜60 秒）と合わない。\n\n## 直すこと\n- srv1-reboot の枝を1つずつにし、起こす前の時刻を残して、それより後の srv1 のログインの記録だけで確かめる。\n- 電源断からの戻りの時間を、qemu-bmc 0.10.0 と 0.9 で3回ずつ測り、docs を実測に合わせる。",
       "doneWhen": "srv1-reboot を単独でも、ほかの訓練のあとでも流して、ログインし直しの確かめが 0 秒で成り立たず、その回のログインを待ってから成り立つ。docs の時間が実測に合っている。",
-      "resolution": null,
+      "resolution": "d80bd14。srv1-reboot は単独でも lib1-poweroff のあとでも、ログインし直しの確かめが 15 秒で成り立つ（0 秒ではない）。電源断からの戻り（On→FC の設定が終わる）は qemu-bmc 0.10.0 で 59.4・38.1・59.2 秒、0.9 で 59.5・38.8・58.7 秒で、版の違いは無い。ばらつきは VM の中の FC の設定の時間（12 秒か 32〜34 秒）。docs を約 40〜60 秒に直した。",
       "refs": [],
       "threads": [
         {
@@ -350,8 +350,8 @@
         }
       ],
       "createdAt": "2026-10-27T11:34:28.661Z",
-      "updatedAt": "2026-10-27T11:34:28.661Z",
-      "closedAt": null,
+      "updatedAt": "2026-10-27T11:38:57.075Z",
+      "closedAt": "2026-10-27T11:38:57.075Z",
       "extra": {}
     }
   ]
