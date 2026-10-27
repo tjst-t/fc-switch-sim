@@ -143,7 +143,7 @@
       "number": 6,
       "kind": "task",
       "title": "(d) 試験：単体と、冗長構成での e2e（障害の入り切り・扉・UA が1回・libmgr と Zabbix に障害が出ない）",
-      "status": "backlog",
+      "status": "in-progress",
       "parent": "move-medium-unit-attention-mhvtl",
       "dependsOn": [
         "b-libmgr-sim-v1",
@@ -156,9 +156,14 @@
       "doneWhen": "作り直した冗長構成で、新しい e2e が2回続けて全部 OK。tests/e2e-ha.sh・e2e-libmgr.sh・e2e-zabbix.sh も全部 OK。",
       "resolution": null,
       "refs": [],
-      "threads": [],
+      "threads": [
+        {
+          "projectId": "22a35639-1710-4609-9573-cd90978da057",
+          "threadId": "6e5b8021-d4a5-4161-a3d4-666870054a36"
+        }
+      ],
       "createdAt": "2026-10-26T18:32:40.218Z",
-      "updatedAt": "2026-10-26T18:33:01.794Z",
+      "updatedAt": "2026-10-27T07:21:20.809Z",
       "closedAt": null,
       "extra": {}
     }
