@@ -405,13 +405,13 @@
       "number": 16,
       "kind": "task",
       "title": "(b) FW 更新の口と状態：REST で版を指定して更新、所要時間のあいだ使えない、終わると版が上がり再起動のあとも残る",
-      "status": "ready",
+      "status": "backlog",
       "parent": "fw-fw-libmgr",
       "dependsOn": [
         "a-fw-rest-api-v1-library-drives-firmware"
       ],
       "milestone": null,
-      "priority": "normal",
+      "priority": "low",
       "labels": [],
       "body": "ストーリー #14 に従う。REST で版を指定して更新を始め、進み具合と結果を状態として読めるようにする。更新中は、設定できる所要時間のあいだ装置が使えない（見せ方はストーリーで決める）。終わると版が上がり、libmgr・mhVTL・VM を起こし直しても新しい版が見える。更新の口を使わないときの動きは変えない。",
       "doneWhen": "単体の試験で、状態の移り変わり（idle→updating→done）と版の更新が確かめられる。起こし直したあとも新しい版が残る。",
@@ -419,7 +419,7 @@
       "refs": [],
       "threads": [],
       "createdAt": "2026-10-27T12:25:42.756Z",
-      "updatedAt": "2026-10-27T12:25:42.756Z",
+      "updatedAt": "2026-10-27T12:25:56.453Z",
       "closedAt": null,
       "extra": {}
     },
