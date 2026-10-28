@@ -515,6 +515,27 @@
       "updatedAt": "2026-10-28T02:38:45.052Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "prepare-sh-seed-single-ha",
+      "number": 21,
+      "kind": "task",
+      "title": "トラップの宛先を prepare.sh seed の引数（と single・ha の環境変数）で指定する（複数可）",
+      "status": "backlog",
+      "parent": "snmpv3-authpriv-vm-syslog",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "low",
+      "labels": [],
+      "body": "ストーリー #19 に従う。いまはライブラリのトラップの宛先が prepare.sh の ha に固定（-traps 172.30.31.30:162,172.30.31.43:1162）、スイッチは switch-*.yaml の snmp.traps に固定。\n- prepare.sh seed に宛先の引数を足す（ライブラリの libmgr の -traps に渡す。いまは -L \"-traps …\" で渡せるが、専用の引数にする）。\n- single・ha では環境変数で上書きできるようにする。スイッチの設定ファイルの宛先も、同じ値から作れるようにする（または docs で指定の仕方を書く）。\n- 複数の宛先（カンマ区切り）。既定はいまのまま。",
+      "doneWhen": "seed の引数・環境変数で、既定と違う宛先（2 つ以上）を指定でき、そこへライブラリとスイッチのトラップが届く。既定の構成の出力は変わらず、既存の e2e が通る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-28T02:38:50.002Z",
+      "updatedAt": "2026-10-28T02:38:50.002Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
