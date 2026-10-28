@@ -494,6 +494,27 @@
       "updatedAt": "2026-10-28T02:38:33.287Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "snmpv3-authpriv-snmpd-libmgr-fc",
+      "number": 20,
+      "kind": "task",
+      "title": "SNMPv3（authPriv）：ライブラリ（snmpd と libmgr のトラップ）と FC スイッチ（自前のエージェントとトラップ）",
+      "status": "backlog",
+      "parent": "snmpv3-authpriv-vm-syslog",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [],
+      "body": "ストーリー #19 に従う。\n- USM のユーザー・認証（SHA 系）・暗号（AES）を、引数・環境変数・設定ファイルで決められるようにする。資格情報の値はリポジトリに書かない。\n- ライブラリ：答えは VM の net-snmp の snmpd なので、snmpd.conf に v3 のユーザー（createUser・rouser authPriv）を、種を作るときに入れる。v2c の community を切る設定も。トラップは libmgr（gosnmp）を v3 でも送れるようにする（gosnmp は v3 の送信に対応）。\n- FC スイッチ：sim/snmpagent は v1・v2c だけなので、v3 の受け（USM の認証・暗号、engineID・時刻の発見、REPORT）を足す。gosnmp の USM の符号化・復号を使う。スイッチの設定（switch.yaml の snmp）に v3 のユーザーを足す。トラップ（sim/swsnmp）も v3 で。\n- 既定（v2c の public）は変えない。",
+      "doneWhen": "snmpget・snmpwalk の v3（authPriv、SHA・AES）で、ライブラリとスイッチを読める。v3 のトラップが受け手に届く。v2c を切る設定で v2c が答えなくなる。既存の e2e（e2e-zabbix を含む）が通る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-28T02:38:45.052Z",
+      "updatedAt": "2026-10-28T02:38:45.052Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
