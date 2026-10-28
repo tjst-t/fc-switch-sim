@@ -536,6 +536,27 @@
       "updatedAt": "2026-10-28T02:38:50.002Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "vm-syslog-udp-tcp-syslog-seed",
+      "number": 22,
+      "kind": "task",
+      "title": "VM の syslog を指定の宛先（UDP・TCP の syslog）へ送る設定を、seed の引数で入れる",
+      "status": "backlog",
+      "parent": "snmpv3-authpriv-vm-syslog",
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "low",
+      "labels": [],
+      "body": "ストーリー #19 に従う。サーバとライブラリの VM の syslog（journald・rsyslog）を、指定の宛先へ送る設定を、prepare.sh seed の引数（と single・ha の環境変数）で種に入れる。既定は送らない。FC の設定（fcsim-setup）や mhVTL・libmgr のログも届くようにする。",
+      "doneWhen": "ラボの中の小さな受け口（syslog を受けるコンテナなど）に、サーバとライブラリの VM から、FC の設定と mhVTL のログが届く（UDP と TCP の両方）。既定の構成では送らない。既存の e2e が通る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-28T02:38:54.153Z",
+      "updatedAt": "2026-10-28T02:38:54.153Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
