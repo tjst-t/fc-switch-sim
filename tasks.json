@@ -469,6 +469,31 @@
       "updatedAt": "2026-10-27T12:26:03.423Z",
       "closedAt": null,
       "extra": {}
+    },
+    {
+      "id": "snmpv3-authpriv-vm-syslog",
+      "number": 19,
+      "kind": "story",
+      "title": "監視のための直し：SNMPv3（authPriv）・トラップの宛先の指定・VM の syslog の転送",
+      "status": "backlog",
+      "parent": null,
+      "dependsOn": [],
+      "milestone": null,
+      "priority": "normal",
+      "labels": [
+        "monitoring",
+        "snmp",
+        "security"
+      ],
+      "body": "## なぜ\n外部の利用者が、このリポジトリの部品（テープライブラリの VM・FC スイッチ・サーバの VM）を監視し、網のセキュリティを詰められるようにする。目安は年内。\n\n## いまの作り（2026-10-28 に調べた）\n- ライブラリの SNMP の答えは、VM の net-snmp の snmpd（pass_persist で libmgr snmp-pass が値を返す）。トラップは libmgr が gosnmp で v2c で送る（-traps と -community）。\n- FC スイッチ（fcsw）の SNMP は、gosnmp の符号化を使った自前のエージェント（sim/snmpagent、v1・v2c だけ受ける）。トラップも v2c（sim/swsnmp）。\n- トラップの宛先は固定：ライブラリは prepare.sh の ha で -traps 172.30.31.30:162,172.30.31.43:1162、スイッチは lab/clab の switch-*.yaml の snmp.traps。\n- VM の syslog は外へ送っていない。\n\n## 中身（タスク）\n1. SNMPv3（authPriv）：libmgr とスイッチ。\n2. トラップの宛先を seed の引数・環境変数で指定する。\n3. VM の syslog を指定の宛先へ送る。\n\n## 守ること\n- 既定の動き（v2c の public、いまのトラップの宛先、syslog は送らない）は変えない。\n- 資格情報の値はリポジトリに書かない（引数・環境変数・設定ファイルで渡す）。",
+      "doneWhen": "3つのタスクが main に入り、それぞれの確かめ方と、既存の e2e（e2e-ha・e2e-sim-faults・e2e-libmgr・e2e-zabbix）が通る。",
+      "resolution": null,
+      "refs": [],
+      "threads": [],
+      "createdAt": "2026-10-28T02:38:33.287Z",
+      "updatedAt": "2026-10-28T02:38:33.287Z",
+      "closedAt": null,
+      "extra": {}
     }
   ]
 }
